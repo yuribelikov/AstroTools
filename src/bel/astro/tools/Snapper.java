@@ -2,39 +2,75 @@ package bel.astro.tools;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.InputEvent;
+import java.io.FileInputStream;
+import java.util.Properties;
 
 
 public class Snapper extends JFrame implements ActionListener
 {
+  private Point windowPos;
+  private Point snapPos;
+  private Point taskBarPos;
+  private Point hidePos;
+
+  int shoots;
+  int exposure;
+  int delay;
+
   private boolean exposing = false;
-  private JTextField shootsNumTF;
-  private JTextField exposureLenTF;
-  private JButton stopBtn;
+
+  private JButton testBtn;
   private JButton startBtn;
+  private JButton stopBtn;
   private Label infoL;
 
 
   private Snapper() throws HeadlessException
   {
+    Properties p = new Properties();
+    try
+    {
+      FileInputStream fis = new FileInputStream("snapper.properties");
+      p.load(fis);
+      fis.close();
+
+      windowPos = parsePoint(p.getProperty("window.position"));
+      snapPos = parsePoint(p.getProperty("snap.position"));
+      taskBarPos = parsePoint(p.getProperty("task.bar.position"));
+      hidePos = parsePoint(p.getProperty("hide.position"));
+
+    }
+    catch (Exception e)
+    {
+      e.printStackTrace();
+    }
+
     setLayout(null);
     Label shootsL = new Label("Shoots:");
     add(shootsL);
     shootsL.setBounds(10, 10, 50, 20);
-    add(shootsNumTF = new JTextField("5"));
+    JTextField shootsNumTF;
+    add(shootsNumTF = new JTextField(p.getProperty("shoots")));
     shootsNumTF.setBounds(60, 10, 30, 20);
     Label exposureL = new Label("Exposure:");
     add(exposureL);
     exposureL.setBounds(120, 10, 60, 20);
-    add(exposureLenTF = new JTextField("60"));
+    JTextField exposureLenTF;
+    add(exposureLenTF = new JTextField(p.getProperty("exposure")));
     exposureLenTF.setBounds(180, 10, 40, 20);
 
+    add(testBtn = new JButton("Test"));
+    testBtn.addActionListener(this);
+    testBtn.setBounds(5, 40, 60, 20);
     add(startBtn = new JButton("Start"));
     startBtn.addActionListener(this);
-    startBtn.setBounds(10, 40, 100, 20);
+    startBtn.setBounds(80, 40, 70, 20);
     add(stopBtn = new JButton("Stop"));
     stopBtn.addActionListener(this);
-    stopBtn.setBounds(120, 40, 100, 20);
+    stopBtn.setBounds(155, 40, 70, 20);
     stopBtn.setEnabled(false);
 
     add(infoL = new Label("Not started"));
@@ -47,34 +83,85 @@ public class Snapper extends JFrame implements ActionListener
     Snapper snapper = new Snapper();
     snapper.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
     snapper.setVisible(true);
-    snapper.setBounds(700, 500, 245, 130);
+    snapper.setBounds(snapper.windowPos.x, snapper.windowPos.y, 245, 130);
 
   }
 
-  private void click(int x, int y)
+  private void test()
   {
-    try
+    new Thread()
     {
-      Robot bot = new Robot();
-      bot.mouseMove(x, y);
-      bot.mousePress(InputEvent.BUTTON1_MASK);
-      bot.mouseRelease(InputEvent.BUTTON1_MASK);
-      bot.mouseMove(getLocation().x + getSize().width / 2, getLocation().y + getSize().height / 2);
+      public void run()
+      {
+        try
+        {
+          testBtn.setEnabled(false);
+          startBtn.setEnabled(false);
+          Robot bot = new Robot();
+          bot.mouseMove(taskBarPos.x, taskBarPos.y);
+          Thread.sleep(2000);
+          bot.mousePress(InputEvent.BUTTON1_MASK);
+          Thread.sleep(1000);
+          bot.mouseRelease(InputEvent.BUTTON1_MASK);
+          Thread.sleep(1000);
+          bot.mouseMove(snapPos.x, snapPos.y);
+          Thread.sleep(3000);
+          bot.mouseMove(hidePos.x, hidePos.y);
+          Thread.sleep(2000);
+          bot.mousePress(InputEvent.BUTTON1_MASK);
+          Thread.sleep(1000);
+          bot.mouseRelease(InputEvent.BUTTON1_MASK);
 
-    }
-    catch (AWTException e)
-    {
-      e.printStackTrace();
-    }
+          bot.mouseMove(getLocation().x + getSize().width / 2, getLocation().y + getSize().height / 2);
+          testBtn.setEnabled(true);
+          startBtn.setEnabled(true);
+        }
+        catch (Exception e1)
+        {
+          e1.printStackTrace();
+        }
+      }
+    }.start();
+
   }
 
-  void expose()
+  private void snap()
+  {
+    new Thread()
+    {
+      public void run()
+      {
+        try
+        {
+          Robot bot = new Robot();
+          bot.mouseMove(taskBarPos.x, taskBarPos.y);
+          bot.mousePress(InputEvent.BUTTON1_MASK);
+          bot.mouseRelease(InputEvent.BUTTON1_MASK);
+          Thread.sleep(2000);
+          bot.mouseMove(snapPos.x, snapPos.y);
+          bot.mousePress(InputEvent.BUTTON1_MASK);
+          bot.mouseRelease(InputEvent.BUTTON1_MASK);
+          Thread.sleep(5000);
+          bot.mouseMove(hidePos.x, hidePos.y);
+          bot.mousePress(InputEvent.BUTTON1_MASK);
+          bot.mouseRelease(InputEvent.BUTTON1_MASK);
+          bot.mouseMove(getLocation().x + getSize().width / 2, getLocation().y + getSize().height / 2);
+        }
+        catch (Exception e1)
+        {
+          e1.printStackTrace();
+        }
+      }
+    }.start();
+  }
+
+  private void expose()
   {
     startBtn.setEnabled(false);
     stopBtn.setEnabled(true);
     exposing = true;
     infoL.setText("Exposing:  shoot: 1,  time: 12 (48)");
-    click(30, 400);
+    snap();
     new Thread()
     {
       public void run()
@@ -98,10 +185,11 @@ public class Snapper extends JFrame implements ActionListener
   public void actionPerformed(ActionEvent e)
   {
 //    System.out.println(e);
-    if (e.getSource() == startBtn)
+    if (e.getSource() == testBtn)
+      test();
+    else if (e.getSource() == startBtn)
       expose();
-
-    if (e.getSource() == stopBtn)
+    else if (e.getSource() == stopBtn)
     {
       exposing = false;
       startBtn.setEnabled(true);
@@ -110,5 +198,9 @@ public class Snapper extends JFrame implements ActionListener
 
   }
 
-
+  private Point parsePoint(String pointStr) throws Exception
+  {
+    String[] sa = pointStr.split(",");
+    return new Point(Integer.parseInt(sa[0].trim()), Integer.parseInt(sa[1].trim()));
+  }
 }
