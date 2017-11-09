@@ -16,13 +16,15 @@ public class Snapper extends JFrame implements ActionListener
   private Point taskBarPos;
   private Point hidePos;
 
-  int shoots;
-  int exposure;
-  int delay;
+  private int exposure;
+  private int delay;
 
+  private Robot bot;
+  private boolean eqModShown = false;
   private boolean exposing = false;
 
-  private JButton testBtn;
+  private JTextField exposureLenTF;
+  private JButton shotBtn;
   private JButton startBtn;
   private JButton stopBtn;
   private Label infoL;
@@ -41,41 +43,37 @@ public class Snapper extends JFrame implements ActionListener
       snapPos = parsePoint(p.getProperty("snap.position"));
       taskBarPos = parsePoint(p.getProperty("task.bar.position"));
       hidePos = parsePoint(p.getProperty("hide.position"));
+      delay = Integer.parseInt(p.getProperty("delay"));
+
+      setTitle("Snapper");
+      setLayout(null);
+      Label exposureL = new Label("Exposure:");
+      add(exposureL);
+      exposureL.setBounds(5, 10, 60, 20);
+      add(exposureLenTF = new JTextField(p.getProperty("exposure")));
+      exposureLenTF.setBounds(70, 10, 35, 20);
+
+      add(shotBtn = new JButton("Shot"));
+      shotBtn.addActionListener(this);
+      shotBtn.setBounds(110, 10, 60, 20);
+      add(startBtn = new JButton("Start"));
+      startBtn.addActionListener(this);
+      startBtn.setBounds(5, 40, 80, 20);
+      add(stopBtn = new JButton("Stop"));
+      stopBtn.addActionListener(this);
+      stopBtn.setBounds(90, 40, 80, 20);
+      stopBtn.setEnabled(false);
+
+      add(infoL = new Label("Not started"));
+      infoL.setBounds(5, 70, 200, 20);
+
+      bot = new Robot();
 
     }
     catch (Exception e)
     {
       e.printStackTrace();
     }
-
-    setLayout(null);
-    Label shootsL = new Label("Shoots:");
-    add(shootsL);
-    shootsL.setBounds(10, 10, 50, 20);
-    JTextField shootsNumTF;
-    add(shootsNumTF = new JTextField(p.getProperty("shoots")));
-    shootsNumTF.setBounds(60, 10, 30, 20);
-    Label exposureL = new Label("Exposure:");
-    add(exposureL);
-    exposureL.setBounds(120, 10, 60, 20);
-    JTextField exposureLenTF;
-    add(exposureLenTF = new JTextField(p.getProperty("exposure")));
-    exposureLenTF.setBounds(180, 10, 40, 20);
-
-    add(testBtn = new JButton("Test"));
-    testBtn.addActionListener(this);
-    testBtn.setBounds(5, 40, 60, 20);
-    add(startBtn = new JButton("Start"));
-    startBtn.addActionListener(this);
-    startBtn.setBounds(80, 40, 70, 20);
-    add(stopBtn = new JButton("Stop"));
-    stopBtn.addActionListener(this);
-    stopBtn.setBounds(155, 40, 70, 20);
-    stopBtn.setEnabled(false);
-
-    add(infoL = new Label("Not started"));
-    infoL.setBounds(10, 70, 200, 20);
-
   }
 
   public static void main(String[] args)
@@ -83,100 +81,117 @@ public class Snapper extends JFrame implements ActionListener
     Snapper snapper = new Snapper();
     snapper.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
     snapper.setVisible(true);
-    snapper.setBounds(snapper.windowPos.x, snapper.windowPos.y, 245, 130);
+    snapper.setBounds(snapper.windowPos.x, snapper.windowPos.y, 190, 130);
 
   }
 
-  private void test()
+  private void showEqMod()
   {
-    new Thread()
-    {
-      public void run()
-      {
-        try
-        {
-          testBtn.setEnabled(false);
-          startBtn.setEnabled(false);
-          Robot bot = new Robot();
-          bot.mouseMove(taskBarPos.x, taskBarPos.y);
-          Thread.sleep(2000);
-          bot.mousePress(InputEvent.BUTTON1_MASK);
-          Thread.sleep(1000);
-          bot.mouseRelease(InputEvent.BUTTON1_MASK);
-          Thread.sleep(1000);
-          bot.mouseMove(snapPos.x, snapPos.y);
-          Thread.sleep(3000);
-          bot.mouseMove(hidePos.x, hidePos.y);
-          Thread.sleep(2000);
-          bot.mousePress(InputEvent.BUTTON1_MASK);
-          Thread.sleep(1000);
-          bot.mouseRelease(InputEvent.BUTTON1_MASK);
+    toFront();
+    bot.mouseMove(taskBarPos.x, taskBarPos.y);
+    bot.mousePress(InputEvent.BUTTON1_MASK);
+    bot.mouseRelease(InputEvent.BUTTON1_MASK);
+    eqModShown = true;
+    moveBack();
+  }
 
-          bot.mouseMove(getLocation().x + getSize().width / 2, getLocation().y + getSize().height / 2);
-          testBtn.setEnabled(true);
-          startBtn.setEnabled(true);
-        }
-        catch (Exception e1)
-        {
-          e1.printStackTrace();
-        }
-      }
-    }.start();
-
+  private void hideEqMod()
+  {
+    bot.mouseMove(hidePos.x, hidePos.y);
+    bot.mousePress(InputEvent.BUTTON1_MASK);
+    bot.mouseRelease(InputEvent.BUTTON1_MASK);
+    eqModShown = false;
+    moveBack();
   }
 
   private void snap()
   {
-    new Thread()
-    {
-      public void run()
-      {
-        try
-        {
-          Robot bot = new Robot();
-          bot.mouseMove(taskBarPos.x, taskBarPos.y);
-          bot.mousePress(InputEvent.BUTTON1_MASK);
-          bot.mouseRelease(InputEvent.BUTTON1_MASK);
-          Thread.sleep(2000);
-          bot.mouseMove(snapPos.x, snapPos.y);
-          bot.mousePress(InputEvent.BUTTON1_MASK);
-          bot.mouseRelease(InputEvent.BUTTON1_MASK);
-          Thread.sleep(5000);
-          bot.mouseMove(hidePos.x, hidePos.y);
-          bot.mousePress(InputEvent.BUTTON1_MASK);
-          bot.mouseRelease(InputEvent.BUTTON1_MASK);
-          bot.mouseMove(getLocation().x + getSize().width / 2, getLocation().y + getSize().height / 2);
-        }
-        catch (Exception e1)
-        {
-          e1.printStackTrace();
-        }
-      }
-    }.start();
+    bot.mouseMove(snapPos.x, snapPos.y);
+    bot.mousePress(InputEvent.BUTTON1_MASK);
+    bot.mouseRelease(InputEvent.BUTTON1_MASK);
+    moveBack();
+  }
+
+  private void moveBack()
+  {
+    bot.mouseMove(getLocation().x + getSize().width - 20, getLocation().y + getSize().height - 20);
+  }
+
+  private void shot()
+  {
+    showEqMod();
+    sleepMs(1000);
+    snap();
+    sleepMs(1000 * exposure);
+    snap();
+    sleepMs(1000);
+    hideEqMod();
+    moveBack();
   }
 
   private void expose()
   {
-    startBtn.setEnabled(false);
-    stopBtn.setEnabled(true);
-    exposing = true;
-    infoL.setText("Exposing:  shoot: 1,  time: 12 (48)");
-    snap();
     new Thread()
     {
       public void run()
       {
+        startBtn.setEnabled(false);
+        shotBtn.setEnabled(false);
+        stopBtn.setEnabled(true);
+        if (exposure < 10)
+          exposure = 10;
+
+        exposing = true;
+        boolean open = false;
+        long started = 0;
         while (exposing)
         {
-          try
+          if (!open)
           {
-            Thread.sleep(2000);
+            if (!eqModShown)
+            {
+              showEqMod();
+              sleepMs(1000);
+            }
+            snap();
+            started = System.currentTimeMillis();
+            open = true;
           }
-          catch (InterruptedException e1)
+          else
           {
-            e1.printStackTrace();
+            long t = (System.currentTimeMillis() - started) / 1000;
+            String text = t + " sec (" + (exposure - t) + " left)";
+            if (t < exposure)
+            {
+              if (t >= 3 && t <= 5 && eqModShown)    // hide after 5 sec
+                hideEqMod();
+              if (exposure - t <= 3 && !eqModShown)    // show before for 5 sec before completion
+                showEqMod();
+              infoL.setText("Exposing for:  " + text);
+            }
+            else
+            {
+              infoL.setText("Completed:  " + text);
+              snap();
+              open = false;
+              sleepMs(delay * 1000);
+            }
           }
+          sleepMs(100);
         }
+
+        if (open)
+        {
+          showEqMod();
+          sleepMs(1000);
+          snap();
+          infoL.setText("Stopped on:  " + (System.currentTimeMillis() - started) / 1000 + " sec");
+          sleepMs(2000);
+        }
+
+        startBtn.setEnabled(true);
+        shotBtn.setEnabled(true);
+        stopBtn.setEnabled(false);
       }
     }.start();
   }
@@ -185,16 +200,13 @@ public class Snapper extends JFrame implements ActionListener
   public void actionPerformed(ActionEvent e)
   {
 //    System.out.println(e);
-    if (e.getSource() == testBtn)
-      test();
+    exposure = Integer.parseInt(exposureLenTF.getText());
+    if (e.getSource() == shotBtn)
+      shot();
     else if (e.getSource() == startBtn)
       expose();
     else if (e.getSource() == stopBtn)
-    {
       exposing = false;
-      startBtn.setEnabled(true);
-      stopBtn.setEnabled(false);
-    }
 
   }
 
@@ -202,5 +214,17 @@ public class Snapper extends JFrame implements ActionListener
   {
     String[] sa = pointStr.split(",");
     return new Point(Integer.parseInt(sa[0].trim()), Integer.parseInt(sa[1].trim()));
+  }
+
+  private void sleepMs(long ms)
+  {
+    try
+    {
+      Thread.sleep(ms);
+    }
+    catch (InterruptedException e)
+    {
+      e.printStackTrace();
+    }
   }
 }
