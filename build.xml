@@ -1,0 +1,11 @@
+<project name="Astro Tools">
+
+    <target name="copy to YD">
+        <copy todir="C:/YandexDisk/astro/tools">
+            <fileset dir="." includes="*.jar"/>
+            <fileset dir="." includes="*.bat"/>
+            <fileset dir="." includes="*.properties"/>
+        </copy>
+    </target>
+
+</project>
