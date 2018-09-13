@@ -18,7 +18,8 @@ import java.util.Properties;
 
 public class Snapper extends JFrame implements ActionListener, Runnable
 {
-  Properties properties = new Properties();
+  private static SimpleDateFormat df1 = new SimpleDateFormat("HH:mm:ss");
+  private Properties properties = new Properties();
 
   private Point windowPos;
   private Point snapPos;
@@ -48,7 +49,7 @@ public class Snapper extends JFrame implements ActionListener, Runnable
   private boolean isRecording = false;
   private Point mousePoint = new Point();
   private long mouseMoveTime = 0;
-  private JButton testBtn;
+  private JButton execBtn;
   private boolean isExecuting = false;
   private JTextArea actionsTA;
   private ArrayList<MouseAction> mouseActions = new ArrayList<>();
@@ -120,9 +121,9 @@ public class Snapper extends JFrame implements ActionListener, Runnable
       add(recBtn = new JButton("Rec"));
       recBtn.addActionListener(this);
       recBtn.setBounds(190, 90, 60, 20);
-      add(testBtn = new JButton("Test"));
-      testBtn.addActionListener(this);
-      testBtn.setBounds(320, 90, 60, 20);
+      add(execBtn = new JButton("Execute"));
+      execBtn.addActionListener(this);
+      execBtn.setBounds(300, 90, 80, 20);
       add(actionsTA = new JTextArea());
       actionsTA.setBounds(190, 115, 180, 120);
       actionsTA.setBorder(new MetalBorders.TextFieldBorder());
@@ -280,9 +281,9 @@ public class Snapper extends JFrame implements ActionListener, Runnable
       isRecording = !isRecording;
       recBtn.setForeground(isRecording ? Color.red : Color.black);
       updateActionsTA();
-      testBtn.setEnabled(!isRecording);
+      execBtn.setEnabled(!isRecording);
     }
-    else if (e.getSource() == testBtn)
+    else if (e.getSource() == execBtn)
       execute();
 
   }
@@ -310,7 +311,6 @@ public class Snapper extends JFrame implements ActionListener, Runnable
   {
     try
     {
-      SimpleDateFormat df1 = new SimpleDateFormat("HH:mm:ss");
       while (thread.isAlive())
       {
         int recDelay = 5000;
@@ -372,7 +372,7 @@ public class Snapper extends JFrame implements ActionListener, Runnable
       {
         isExecuting = true;
         recBtn.setEnabled(false);
-        testBtn.setForeground(Color.red);
+        execBtn.setForeground(Color.red);
         sleepMs(1000);
         for (MouseAction ms : mouseActions)
         {
@@ -386,8 +386,8 @@ public class Snapper extends JFrame implements ActionListener, Runnable
         }
         sleepMs(1000);
         recBtn.setEnabled(true);
-        testBtn.setForeground(Color.black);
-        currentActionL.setText("");
+        execBtn.setForeground(Color.black);
+        currentActionL.setText("finished on " + df1.format(new Date()));
         isExecuting = false;
       }
     }.start();
