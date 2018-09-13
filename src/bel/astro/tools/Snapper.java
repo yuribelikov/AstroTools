@@ -1,6 +1,7 @@
 package bel.astro.tools;
 
 import javax.swing.*;
+import javax.swing.plaf.metal.MetalBorders;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
@@ -9,6 +10,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.io.FileInputStream;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Properties;
@@ -16,6 +18,8 @@ import java.util.Properties;
 
 public class Snapper extends JFrame implements ActionListener, Runnable
 {
+  Properties properties = new Properties();
+
   private Point windowPos;
   private Point snapPos;
   private Point taskBarPos;
@@ -40,29 +44,37 @@ public class Snapper extends JFrame implements ActionListener, Runnable
   private Label totalExposureL = new Label();
   private Label minutesToParkL = new Label();
   private JButton copyBtn;
+  private JButton recBtn;
+  private boolean isRecording = false;
+  private Point mousePoint = new Point();
+  private long mouseMoveTime = 0;
+  private JButton testBtn;
+  private boolean isExecuting = false;
+  private JTextArea actionsTA;
+  private ArrayList<MouseAction> mouseActions = new ArrayList<>();
+  private Label currentActionL = new Label();
 
 
   private Snapper() throws HeadlessException
   {
-    Properties p = new Properties();
     try
     {
       FileInputStream fis = new FileInputStream("snapper.properties");
-      p.load(fis);
+      properties.load(fis);
       fis.close();
 
-      windowPos = parsePoint(p.getProperty("window.position"));
-      snapPos = parsePoint(p.getProperty("snap.position"));
-      taskBarPos = parsePoint(p.getProperty("task.bar.position"));
-      hidePos = parsePoint(p.getProperty("hide.position"));
-      delay = Integer.parseInt(p.getProperty("delay"));
+      windowPos = parsePoint(properties.getProperty("window.position"));
+      snapPos = parsePoint(properties.getProperty("snap.position"));
+      taskBarPos = parsePoint(properties.getProperty("task.bar.position"));
+      hidePos = parsePoint(properties.getProperty("hide.position"));
+      delay = Integer.parseInt(properties.getProperty("delay"));
 
       setTitle("Snapper");
       setLayout(null);
       Label exposureL = new Label("Exposure:");
       add(exposureL);
       exposureL.setBounds(5, 10, 60, 20);
-      add(exposureLenTF = new JTextField(p.getProperty("exposure")));
+      add(exposureLenTF = new JTextField(properties.getProperty("exposure")));
       exposureLenTF.setBounds(70, 10, 35, 20);
 
       add(shotBtn = new JButton("Shot"));
@@ -87,7 +99,7 @@ public class Snapper extends JFrame implements ActionListener, Runnable
       Label shutdownL = new Label("Shutdown on:");
       add(shutdownL);
       shutdownL.setBounds(250, 10, 80, 20);
-      add(shutdownTF = new JTextField(p.getProperty("shutdown")));
+      add(shutdownTF = new JTextField(properties.getProperty("shutdown")));
       shutdownTF.setBounds(330, 10, 40, 20);
 
       Label totalExpL = new Label("Total exposure:");
@@ -105,6 +117,18 @@ public class Snapper extends JFrame implements ActionListener, Runnable
       copyBtn.addActionListener(this);
       copyBtn.setBounds(320, 60, 60, 20);
 
+      add(recBtn = new JButton("Rec"));
+      recBtn.addActionListener(this);
+      recBtn.setBounds(190, 90, 60, 20);
+      add(testBtn = new JButton("Test"));
+      testBtn.addActionListener(this);
+      testBtn.setBounds(320, 90, 60, 20);
+      add(actionsTA = new JTextArea());
+      actionsTA.setBounds(190, 115, 180, 120);
+      actionsTA.setBorder(new MetalBorders.TextFieldBorder());
+      add(currentActionL);
+      currentActionL.setBounds(190, 235, 115, 20);
+
     }
     catch (Exception e)
     {
@@ -117,7 +141,8 @@ public class Snapper extends JFrame implements ActionListener, Runnable
     Snapper snapper = new Snapper();
     snapper.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
     snapper.setVisible(true);
-    snapper.setBounds(snapper.windowPos.x, snapper.windowPos.y, 400, 130);
+    snapper.setBounds(snapper.windowPos.x, snapper.windowPos.y, 400, 300);
+    snapper.setAlwaysOnTop(true);
     snapper.thread.setDaemon(true);
     snapper.thread.start();
   }
@@ -250,7 +275,15 @@ public class Snapper extends JFrame implements ActionListener, Runnable
       StringSelection ss = new StringSelection(minutesToParkL.getText());
       clipboard.setContents(ss, ss);
     }
-
+    else if (e.getSource() == recBtn)
+    {
+      isRecording = !isRecording;
+      recBtn.setForeground(isRecording ? Color.red : Color.black);
+      updateActionsTA();
+      testBtn.setEnabled(!isRecording);
+    }
+    else if (e.getSource() == testBtn)
+      execute();
   }
 
   private Point parsePoint(String pointStr) throws Exception
@@ -279,12 +312,46 @@ public class Snapper extends JFrame implements ActionListener, Runnable
       SimpleDateFormat df1 = new SimpleDateFormat("HH:mm:ss");
       while (thread.isAlive())
       {
+        int recDelay = 5000;
+        try
+        {
+          recDelay = Integer.parseInt(properties.getProperty("rec.delay"));
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        long now = System.currentTimeMillis();
         currTimeL.setText(df1.format(new Date()));
-        long secondsDiff = (parseTime(shutdownTF.getText()) - System.currentTimeMillis()) / 1000;
+        long secondsDiff = (parseTime(shutdownTF.getText()) - now) / 1000;
         long hours = secondsDiff / 3600;
         long minutes = (secondsDiff - 3600 * hours) / 60;
         totalExposureL.setText(hours + (minutes < 10 ? ":0" : ":") + minutes);
         minutesToParkL.setText("" + secondsDiff / 60);
+
+        if (secondsDiff <= 0)
+        {
+          execute();
+          break;
+        }
+
+        if (isRecording)
+        {
+          Point p = MouseInfo.getPointerInfo().getLocation();
+          if (!p.equals(mousePoint))
+          {
+            mousePoint = p;
+            mouseMoveTime = now;
+          }
+          else if (now - mouseMoveTime > 1000 * recDelay)
+          {
+            mouseActions.add(new MouseAction(5, mousePoint));
+            mouseMoveTime = now;
+          }
+          updateActionsTA();
+        }
+        else if (!isExecuting)
+          parseActionsFromTA();
 
         Thread.sleep(100);
       }
@@ -293,6 +360,34 @@ public class Snapper extends JFrame implements ActionListener, Runnable
     {
       e.printStackTrace();
     }
+  }
+
+  private void execute()
+  {
+    new Thread()
+    {
+      public void run()
+      {
+        isExecuting = true;
+        recBtn.setEnabled(false);
+        testBtn.setForeground(Color.red);
+        sleepMs(1000);
+        for (MouseAction ms : mouseActions)
+        {
+          currentActionL.setText(ms.toString());
+          sleepMs(1000 * ms.delay);
+          bot.mouseMove(ms.p.x, ms.p.y);
+          sleepMs(800);
+          bot.mousePress(InputEvent.BUTTON1_MASK);
+          bot.mouseRelease(InputEvent.BUTTON1_MASK);
+        }
+        sleepMs(1000);
+        recBtn.setEnabled(true);
+        testBtn.setForeground(Color.black);
+        currentActionL.setText("");
+        isExecuting = false;
+      }
+    }.start();
   }
 
   private long parseTime(String time)
@@ -313,5 +408,63 @@ public class Snapper extends JFrame implements ActionListener, Runnable
     }
 
     return 0;
+  }
+
+  private void updateActionsTA()
+  {
+    String s = "";
+    for (MouseAction ma : mouseActions)
+      s += ma + "\n";
+
+    if (isRecording)
+      s += ">> " + mousePoint.x + ", " + mousePoint.y;
+
+    actionsTA.setText(s);
+  }
+
+  private void parseActionsFromTA()
+  {
+    mouseActions.clear();
+    String[] sa = actionsTA.getText().split("\n");
+    for (String s : sa)
+    {
+      MouseAction ma = new MouseAction(s);
+      if (ma.p != null)
+        mouseActions.add(ma);
+    }
+
+  }
+
+  private class MouseAction
+  {
+    int delay;
+    Point p;
+
+    MouseAction(int delay, Point p)
+    {
+      this.delay = delay;
+      this.p = p;
+    }
+
+    MouseAction(String s)
+    {
+      try
+      {
+        s = s.trim();
+        int i = s.indexOf(':');
+        delay = Integer.parseInt(s.substring(0, i));
+        int i2 = s.indexOf(',');
+        p = new Point(Integer.parseInt(s.substring(i + 1, i2).trim()), Integer.parseInt(s.substring(i2 + 1).trim()));
+      }
+      catch (Exception ignored)
+      {
+      }
+    }
+
+    @Override
+    public String toString()
+    {
+      return delay + ": " + p.x + ", " + p.y;
+    }
   }
 }
