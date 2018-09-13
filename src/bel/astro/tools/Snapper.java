@@ -284,6 +284,7 @@ public class Snapper extends JFrame implements ActionListener, Runnable
     }
     else if (e.getSource() == testBtn)
       execute();
+
   }
 
   private Point parsePoint(String pointStr) throws Exception
@@ -347,6 +348,7 @@ public class Snapper extends JFrame implements ActionListener, Runnable
           {
             mouseActions.add(new MouseAction(5, mousePoint));
             mouseMoveTime = now;
+            Toolkit.getDefaultToolkit().beep();
           }
           updateActionsTA();
         }
@@ -380,6 +382,7 @@ public class Snapper extends JFrame implements ActionListener, Runnable
           sleepMs(800);
           bot.mousePress(InputEvent.BUTTON1_MASK);
           bot.mouseRelease(InputEvent.BUTTON1_MASK);
+          Toolkit.getDefaultToolkit().beep();
         }
         sleepMs(1000);
         recBtn.setEnabled(true);
