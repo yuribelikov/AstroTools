@@ -2,14 +2,19 @@ package bel.astro.tools;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.io.FileInputStream;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.Properties;
 
 
-public class Snapper extends JFrame implements ActionListener
+public class Snapper extends JFrame implements ActionListener, Runnable
 {
   private Point windowPos;
   private Point snapPos;
@@ -28,6 +33,13 @@ public class Snapper extends JFrame implements ActionListener
   private JButton startBtn;
   private JButton stopBtn;
   private Label infoL;
+
+  private Thread thread = new Thread(this);
+  private Label currTimeL = new Label();
+  private JTextField shutdownTF;
+  private Label totalExposureL = new Label();
+  private Label minutesToParkL = new Label();
+  private JButton copyBtn;
 
 
   private Snapper() throws HeadlessException
@@ -65,9 +77,33 @@ public class Snapper extends JFrame implements ActionListener
       stopBtn.setEnabled(false);
 
       add(infoL = new Label("Not started"));
-      infoL.setBounds(5, 70, 200, 20);
+      infoL.setBounds(5, 70, 180, 20);
 
       bot = new Robot();
+
+      add(currTimeL);
+      currTimeL.setForeground(Color.BLUE);
+      currTimeL.setBounds(190, 10, 50, 20);
+      Label shutdownL = new Label("Shutdown on:");
+      add(shutdownL);
+      shutdownL.setBounds(250, 10, 80, 20);
+      add(shutdownTF = new JTextField(p.getProperty("shutdown")));
+      shutdownTF.setBounds(330, 10, 40, 20);
+
+      Label totalExpL = new Label("Total exposure:");
+      add(totalExpL);
+      totalExpL.setBounds(190, 40, 90, 20);
+      add(totalExposureL);
+      totalExposureL.setBounds(280, 40, 40, 20);
+
+      Label minsToParkL = new Label("Minutes to park:");
+      add(minsToParkL);
+      minsToParkL.setBounds(190, 60, 90, 20);
+      add(minutesToParkL);
+      minutesToParkL.setBounds(280, 60, 40, 20);
+      add(copyBtn = new JButton("cp"));
+      copyBtn.addActionListener(this);
+      copyBtn.setBounds(320, 60, 60, 20);
 
     }
     catch (Exception e)
@@ -81,8 +117,9 @@ public class Snapper extends JFrame implements ActionListener
     Snapper snapper = new Snapper();
     snapper.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
     snapper.setVisible(true);
-    snapper.setBounds(snapper.windowPos.x, snapper.windowPos.y, 190, 130);
-
+    snapper.setBounds(snapper.windowPos.x, snapper.windowPos.y, 400, 130);
+    snapper.thread.setDaemon(true);
+    snapper.thread.start();
   }
 
   private void showEqMod()
@@ -207,6 +244,12 @@ public class Snapper extends JFrame implements ActionListener
       expose();
     else if (e.getSource() == stopBtn)
       exposing = false;
+    else if (e.getSource() == copyBtn)
+    {
+      Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+      StringSelection ss = new StringSelection(minutesToParkL.getText());
+      clipboard.setContents(ss, ss);
+    }
 
   }
 
@@ -226,5 +269,49 @@ public class Snapper extends JFrame implements ActionListener
     {
       e.printStackTrace();
     }
+  }
+
+  @Override
+  public void run()
+  {
+    try
+    {
+      SimpleDateFormat df1 = new SimpleDateFormat("HH:mm:ss");
+      while (thread.isAlive())
+      {
+        currTimeL.setText(df1.format(new Date()));
+        long secondsDiff = (parseTime(shutdownTF.getText()) - System.currentTimeMillis()) / 1000;
+        long hours = secondsDiff / 3600;
+        long minutes = (secondsDiff - 3600 * hours) / 60;
+        totalExposureL.setText(hours + (minutes < 10 ? ":0" : ":") + minutes);
+        minutesToParkL.setText("" + secondsDiff / 60);
+
+        Thread.sleep(100);
+      }
+    }
+    catch (InterruptedException e)
+    {
+      e.printStackTrace();
+    }
+  }
+
+  private long parseTime(String time)
+  {
+    try
+    {
+      int idx = time.indexOf(':');
+      int hours = Integer.parseInt(time.substring(0, idx));
+      int minutes = Integer.parseInt(time.substring(idx + 1));
+      Calendar c = Calendar.getInstance();
+      c.add(Calendar.DATE, 1);
+      c.set(Calendar.HOUR_OF_DAY, hours);
+      c.set(Calendar.MINUTE, minutes);
+      return c.getTimeInMillis();
+    }
+    catch (Exception ignored)
+    {
+    }
+
+    return 0;
   }
 }
