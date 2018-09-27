@@ -9,6 +9,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -325,16 +326,15 @@ public class Snapper extends JFrame implements ActionListener, Runnable
         long now = System.currentTimeMillis();
         currTimeL.setText(df1.format(new Date()));
         long secondsDiff = (parseTime(shutdownTF.getText()) - now) / 1000;
+        while (secondsDiff < -5)
+          secondsDiff += 60 * 60 * 24;
         long hours = secondsDiff / 3600;
         long minutes = (secondsDiff - 3600 * hours) / 60;
         totalExposureL.setText(hours + (minutes < 10 ? ":0" : ":") + minutes);
         minutesToParkL.setText("" + secondsDiff / 60);
 
-        if (secondsDiff <= 0)
-        {
+        if (secondsDiff <= 0 && !isExecuting)
           execute();
-          break;
-        }
 
         if (isRecording)
         {
@@ -346,7 +346,7 @@ public class Snapper extends JFrame implements ActionListener, Runnable
           }
           else if (now - mouseMoveTime > 1000 * recDelay)
           {
-            mouseActions.add(new MouseAction(5, mousePoint));
+            mouseActions.add(new MouseAction(mouseActions.size(), mousePoint));
             mouseMoveTime = now;
             Toolkit.getDefaultToolkit().beep();
           }
@@ -374,6 +374,14 @@ public class Snapper extends JFrame implements ActionListener, Runnable
         recBtn.setEnabled(false);
         execBtn.setForeground(Color.red);
         sleepMs(1000);
+        try
+        {
+          Runtime.getRuntime().exec(properties.getProperty("rodos3.exe"));
+        }
+        catch (Exception e)
+        {
+          e.printStackTrace();
+        }
         for (MouseAction ms : mouseActions)
         {
           currentActionL.setText(ms.toString());
@@ -401,9 +409,9 @@ public class Snapper extends JFrame implements ActionListener, Runnable
       int hours = Integer.parseInt(time.substring(0, idx));
       int minutes = Integer.parseInt(time.substring(idx + 1));
       Calendar c = Calendar.getInstance();
-      c.add(Calendar.DATE, 1);
       c.set(Calendar.HOUR_OF_DAY, hours);
       c.set(Calendar.MINUTE, minutes);
+      c.set(Calendar.SECOND, 0);
       return c.getTimeInMillis();
     }
     catch (Exception ignored)
