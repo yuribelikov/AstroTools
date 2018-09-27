@@ -9,7 +9,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -371,6 +370,8 @@ public class Snapper extends JFrame implements ActionListener, Runnable
       public void run()
       {
         isExecuting = true;
+        String title = getTitle();
+        setTitle(title + " - executing..");
         recBtn.setEnabled(false);
         execBtn.setForeground(Color.red);
         sleepMs(1000);
@@ -396,6 +397,7 @@ public class Snapper extends JFrame implements ActionListener, Runnable
         recBtn.setEnabled(true);
         execBtn.setForeground(Color.black);
         currentActionL.setText("finished on " + df1.format(new Date()));
+        setTitle(title);
         isExecuting = false;
       }
     }.start();
