@@ -1,10 +1,8 @@
 <project name="Astro Tools">
 
     <target name="copy to YD">
-        <copy todir="C:/YandexDisk/astro/tools/snapper">
-            <fileset dir="." includes="*.jar"/>
-            <fileset dir="." includes="*.bat"/>
-            <fileset dir="." includes="*.properties"/>
+        <copy todir="D:/YandexDisk/astro/tools">
+            <fileset dir="." includes="**/*"/>
         </copy>
     </target>
 
