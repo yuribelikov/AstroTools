@@ -1,1 +1,1 @@
-@start javaw -jar snapper.jar
+@start javaw -cp tools.jar bel.astro.tools.Snapper 
