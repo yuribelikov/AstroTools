@@ -56,6 +56,9 @@ public class Monitor implements Runnable
       lgr.info("Astro Monitor started");
 
       execRelay("relay.test");
+      sleepMs(1100);
+      if (error != -1)
+        throw new Exception("Cannot access relay");
 
       while (isAlive)
       {
@@ -90,36 +93,28 @@ public class Monitor implements Runnable
   private void execRelay(String property) throws Exception
   {
     error = 0;
-    new Thread()
-    {
-      public void run()
+    new Thread(() -> {
+      try
       {
-
-        try
+        String relayPath = properties.getProperty("relay.path");
+        String relayCmd = properties.getProperty(property);
+        if (relayCmd == null || relayCmd.length() == 0)
+          System.out.println("WARNING: relay command property not found: " + property);
+        else
         {
-          String relayPath = properties.getProperty("relay.path");
-          String relayCmd = properties.getProperty(property);
-          if (relayCmd == null || relayCmd.length() == 0)
-            System.out.println("WARNING: relay command property not found: " + property);
-          else
-          {
-            String command = "cmd /c start " + relayPath + " " + relayCmd;
-            lgr.info("execute: " + command);
-            Process p = Runtime.getRuntime().exec(command);
-            sleepMs(1000);
-            Monitor.error = p.getErrorStream().read();
-          }
-        }
-        catch (IOException e)
-        {
-          lgr.warn(e.getMessage(), e);
+          String command = "cmd /c start " + relayPath + " " + relayCmd;
+          lgr.info("execute: " + command);
+          Process p = Runtime.getRuntime().exec(command);
+          sleepMs(1000);
+          Monitor.error = p.getErrorStream().read();
         }
       }
-    }.start();
-
-    sleepMs(1100);
-    if (error != -1)
-      throw new Exception("Cannot access relay");
+      catch (IOException e)
+      {
+        lgr.warn(e.getMessage(), e);
+        Monitor.error = 1;
+      }
+    }).start();
   }
 
   private void sleepMs(long ms)
