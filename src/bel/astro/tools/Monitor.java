@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.Properties;
@@ -19,7 +18,6 @@ import java.util.Properties;
 public class Monitor implements Runnable
 {
   private static Logger lgr = Logger.getLogger(Monitor.class.getName());
-  private static SimpleDateFormat df1 = new SimpleDateFormat("HH:mm:ss");
   private static int error = 0;
   private Properties properties = new Properties();
   private Thread thread = new Thread(this);
@@ -52,15 +50,18 @@ public class Monitor implements Runnable
       {
         lgr.info("");
         reloadProperties();
+        int phd2logDelay = getIntProperty("phd2.log.check.delay", 15);
+        lgr.info("phd2logDelay: " + phd2logDelay + " seconds");
 
         boolean guidingFine = analysePhd2logFile();
         if (!guidingFine)
         {
-          lgr.warn("guiding failed and timeout.. starting shutdown sequesnce..");
+          lgr.warn("guiding failed and timed out.. starting shutdown sequence..");
+          shutdown();
+          isAlive = false;
+          break;
         }
 
-        int phd2logDelay = getIntProperty("phd2.log.check.delay", 15);
-        lgr.info("phd2logDelay: " + phd2logDelay +" seconds");
         long checkOn = System.currentTimeMillis() + 1000 * phd2logDelay;
         while (System.currentTimeMillis() < checkOn)
           Thread.sleep(100);
@@ -105,7 +106,7 @@ public class Monitor implements Runnable
     lgr.info("relay is ok");
   }
 
-  private void execRelay(String property) throws Exception
+  private void execRelay(String property)
   {
     error = 0;
     new Thread(() -> {
@@ -186,10 +187,10 @@ public class Monitor implements Runnable
           guidingFailureTime = System.currentTimeMillis();
 
         int phd2guidingFailureTimeout = getIntProperty("phd2.guiding.failure.timeout", 120);
-        lgr.info("phd2guidingFailureTimeout: " + phd2guidingFailureTimeout +" seconds");
-        lgr.info("PHD2 time to failure timeout: " + (guidingFailureTime + 1000 * phd2guidingFailureTimeout - System.currentTimeMillis()) / 1000 +" seconds");
+        lgr.info("phd2guidingFailureTimeout: " + phd2guidingFailureTimeout + " seconds");
+        lgr.info("PHD2 time to failure timeout: " + (guidingFailureTime + 1000 * phd2guidingFailureTimeout - System.currentTimeMillis()) / 1000 + " seconds");
 
-        return  (System.currentTimeMillis() < guidingFailureTime + 1000 * phd2guidingFailureTimeout);
+        return (System.currentTimeMillis() < guidingFailureTime + 1000 * phd2guidingFailureTimeout);
       }
       else
       {
@@ -218,6 +219,17 @@ public class Monitor implements Runnable
     {
       return -1;
     }
+  }
+
+  private void shutdown()
+  {
+    lgr.info("parking scope..");
+    sleepMs(1000);
+    lgr.info("checking whether scope parked..");
+    sleepMs(1000);
+    lgr.info("closing roof..");
+    sleepMs(1000);
+    lgr.info("shutdown finished.");
   }
 
   private void sleepMs(long ms)
