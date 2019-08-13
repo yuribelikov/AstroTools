@@ -25,8 +25,9 @@ public class Monitor implements Runnable
   private Thread thread = new Thread(this);
   private boolean isAlive = true;
 
-  private boolean guiding = false;
-  private int guidingStep = -1;
+  private int lastGuidingStep = -1;
+  private long guidingFailureTime = -1;
+  private boolean guidingWasActive = false;
 
 
   public static void main(String[] args)
@@ -52,11 +53,15 @@ public class Monitor implements Runnable
         lgr.info("");
         reloadProperties();
 
-        analysePhd2logFile();
+        boolean guidingFine = analysePhd2logFile();
+        if (!guidingFine)
+        {
+          lgr.warn("guiding failed and timeout.. starting shutdown sequesnce..");
+        }
 
-        int phd2logDelay = getIntProperty("phd2.log.check.delay", 15000);
-        lgr.info("phd2logDelay: " + phd2logDelay);
-        long checkOn = System.currentTimeMillis() + phd2logDelay;
+        int phd2logDelay = getIntProperty("phd2.log.check.delay", 15);
+        lgr.info("phd2logDelay: " + phd2logDelay +" seconds");
+        long checkOn = System.currentTimeMillis() + 1000 * phd2logDelay;
         while (System.currentTimeMillis() < checkOn)
           Thread.sleep(100);
 
@@ -127,7 +132,7 @@ public class Monitor implements Runnable
     }).start();
   }
 
-  private void analysePhd2logFile()
+  private boolean analysePhd2logFile()    // return true if guiding is in progress or recently failed; false if failed and failure timeout occured
   {
     try
     {
@@ -137,40 +142,69 @@ public class Monitor implements Runnable
         .filter(f -> !Files.isDirectory(f) && f.getFileName().toString().startsWith("PHD2_GuideLog"))  // exclude subdirectories from listing
         .max(Comparator.comparingLong(f -> f.toFile().lastModified()));  // finally get the last file using simple comparator by lastModified field
 
-      if (lastFilePath.isPresent()) // your folder may be empty
+      if (!lastFilePath.isPresent()) // your folder may be empty
       {
-        lgr.info("last PHD2 log: " + lastFilePath.get().getFileName());
-        BufferedReader reader = Files.newBufferedReader(lastFilePath.get(), StandardCharsets.UTF_8);
-        final String guiding_begins = "Guiding Begins";
-        String guidingStatus = "undefined";
-        String lastLine = "";
-        int step = -1;
-        String line;
-        while ((line = reader.readLine()) != null)
+        lgr.info("PHD2 log not found in: " + dir.toFile().getAbsolutePath());
+        return false;
+      }
+
+      lgr.info("last PHD2 log: " + lastFilePath.get().getFileName());
+      BufferedReader reader = Files.newBufferedReader(lastFilePath.get(), StandardCharsets.UTF_8);
+      final String guiding_begins = "Guiding Begins";
+      String guidingStatus = "undefined";
+      String lastLine = "";
+      int guidingStep = -1;
+      String line;
+      while ((line = reader.readLine()) != null)
+      {
+        if (line.startsWith(guiding_begins) || line.startsWith("Guiding Ends"))
+          guidingStatus = line;
+
+        if (line.trim().length() > 0)
         {
-          if (line.startsWith(guiding_begins) || line.startsWith("Guiding Ends"))
-            guidingStatus = line;
-
-          if (line.trim().length() > 0)
-          {
-            lastLine = line;
-            step = getGuidingStep(line);
-          }
+          lastLine = line;
+          guidingStep = getGuidingStep(line);
         }
+      }
 
-        guiding = (!lastLine.contains("DROP") && guidingStatus.startsWith(guiding_begins));
-        guidingStep = step;
-        lgr.info("PHD2 guiding: " + guiding + ", guidingStatus: " + guidingStatus + ", guidingStep: " + guidingStep);
-        lgr.info("PHD2 lastLine: " + lastLine);
+      boolean guiding = (!lastLine.contains("DROP") && guidingStatus.startsWith(guiding_begins));
+      lgr.info("PHD2 guiding: " + guiding + ", guidingStatus: " + guidingStatus + ", guidingStep: " + guidingStep);
+      lgr.info("PHD2 last log line: " + lastLine);
+      if (guiding)
+        guidingWasActive = true;
+
+      if (!guidingWasActive)
+      {
+        lgr.info("guiding not started, waiting for guiding starting..");
+        return true;
+      }
+
+      if (!guiding || guidingStep == lastGuidingStep)   // not guiding or stuck
+      {
+        lgr.warn(guiding ? "PHD2 log file is not updaing" : "guiding failed");
+        if (guidingFailureTime == -1)
+          guidingFailureTime = System.currentTimeMillis();
+
+        int phd2guidingFailureTimeout = getIntProperty("phd2.guiding.failure.timeout", 120);
+        lgr.info("phd2guidingFailureTimeout: " + phd2guidingFailureTimeout +" seconds");
+        lgr.info("PHD2 time to failure timeout: " + (guidingFailureTime + 1000 * phd2guidingFailureTimeout - System.currentTimeMillis()) / 1000 +" seconds");
+
+        return  (System.currentTimeMillis() < guidingFailureTime + 1000 * phd2guidingFailureTimeout);
       }
       else
-        lgr.info("PHD2 log not found in: " + dir.toFile().getAbsolutePath());
+      {
+        lastGuidingStep = guidingStep;
+        guidingFailureTime = -1;
+        return true;
+      }
 
     }
     catch (Exception e)
     {
       lgr.warn(e.getMessage(), e);
     }
+
+    return false;
   }
 
   private int getGuidingStep(String logLine)
