@@ -13,37 +13,15 @@ public class Monitor implements Runnable
 {
   private static Logger lgr = Logger.getLogger(Monitor.class.getName());
   private static SimpleDateFormat df1 = new SimpleDateFormat("HH:mm:ss");
+  private static int error = 0;
   private Properties properties = new Properties();
-
   private Thread thread = new Thread(this);
   private boolean isAlive = true;
-
-  private static int error = 0;
-
-
-  private Monitor()
-  {
-    try
-    {
-      FileInputStream fis = new FileInputStream("monitor.properties");
-      properties.load(fis);
-      fis.close();
-
-    }
-    catch (Exception e)
-    {
-      e.printStackTrace();
-    }
-  }
 
   public static void main(String[] args)
   {
     PropertyConfigurator.configure("log4j.properties");
-
-    Monitor monitor = new Monitor();
-    monitor.thread.start();
-
-//    monitor.isAlive = false;
+    new Monitor().thread.start();
   }
 
   @Override
@@ -55,31 +33,18 @@ public class Monitor implements Runnable
       lgr.info("");
       lgr.info("Astro Monitor started");
 
-      execRelay("relay.test");
-      sleepMs(1100);
-      if (error != -1)
-        throw new Exception("Cannot access relay");
+      reloadProperties();
+      testRelay();
 
       while (isAlive)
       {
-        int phd2LogCheckDelay = 30000;
-        try
-        {
-          phd2LogCheckDelay = Integer.parseInt(properties.getProperty("phd2.log.check.delay"));
-        }
-        catch (Exception ignored)
-        {
-        }
+        reloadProperties();
 
-        long now = System.currentTimeMillis();
-
-        sleepMs(1000);
-        execRelay("relay.light.on");
-        sleepMs(1000);
-        execRelay("relay.light.off");
+        long checkOn = System.currentTimeMillis() + getIntProperty("phd2.log.check.delay", 30000);
+        while (System.currentTimeMillis() < checkOn)
+          Thread.sleep(100);
 
 
-        Thread.sleep(100);
       }
     }
     catch (Exception e)
@@ -88,6 +53,36 @@ public class Monitor implements Runnable
     }
 
     lgr.info("Astro Monitor finished.");
+    lgr.info("----------------------------------------------------------------------------------------");
+  }
+
+  private void reloadProperties()
+  {
+    try
+    {
+      FileInputStream fis = new FileInputStream("monitor.properties");
+      properties.load(fis);
+      fis.close();
+
+    }
+    catch (Exception e)
+    {
+      lgr.warn(e.getMessage(), e);
+    }
+  }
+
+  private void testRelay() throws Exception
+  {
+    lgr.info("testing relay..");
+
+    execRelay("relay.in.light.on");
+    sleepMs(1000);
+    execRelay("relay.in.light.off");
+    sleepMs(1100);
+    if (error != -1)
+      throw new Exception("Cannot access relay");
+
+    lgr.info("relay is ok");
   }
 
   private void execRelay(String property) throws Exception
@@ -129,4 +124,15 @@ public class Monitor implements Runnable
     }
   }
 
+  private int getIntProperty(String property, int defaultValue)
+  {
+    try
+    {
+      return Integer.parseInt(properties.getProperty(property));
+    }
+    catch (Exception ignored)
+    {
+      return defaultValue;
+    }
+  }
 }
