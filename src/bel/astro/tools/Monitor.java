@@ -62,6 +62,7 @@ public class Monitor implements Runnable
         boolean guidingFine = analysePhd2logFile();
         if (!guidingFine)
         {
+          lgr.info("");
           lgr.warn("guiding failed and timed out.. starting shutdown sequence..");
           shutdown();
           isAlive = false;
@@ -100,8 +101,8 @@ public class Monitor implements Runnable
 
   private void testRelay() throws Exception
   {
+    lgr.info("");
     lgr.info("testing relay..");
-
     execRelay("relay.in.light.on");
     sleepS(1);
     execRelay("relay.in.light.off");
@@ -227,15 +228,16 @@ public class Monitor implements Runnable
     }
   }
 
-  private void shutdown() throws Exception
+  private void shutdown()
   {
     try
     {
-      lgr.info("main mirrow warming up..");
+      lgr.info("starting main mirrow warmup..");
       execRelay("relay.main.mirror.warm.on");
 
       cameraWarmup();
 
+      sleepS(3);
       scopePark();
 
       roofClose();
@@ -248,14 +250,16 @@ public class Monitor implements Runnable
     catch (Exception e)
     {
       lgr.warn(e.getMessage(), e);
-      execRelay("relay.camera.cooler.off");
-      sleepS(1);
-      throw e;
+      lgr.info("");
+      lgr.info("shutdown aborted.");
+      cameraWarmingUp = false;
     }
   }
 
   private void scopeTest() throws Exception
   {
+    lgr.info("");
+    lgr.info("testing scope..");
     HashMap scopeData = execScript(properties.getProperty("eqmod.scope.data"));
     if (scopeData.size() == 0)
       throw new Exception("Cannot access scope");
@@ -263,6 +267,7 @@ public class Monitor implements Runnable
 
   private void scopePark() throws Exception
   {
+    lgr.info("");
     lgr.info("parking scope..");
     HashMap scopeData = execScript(properties.getProperty("eqmod.scope.park"));
     if (!scopeData.containsKey("parking"))
@@ -271,7 +276,7 @@ public class Monitor implements Runnable
     long mustParkBy = System.currentTimeMillis() + getIntProperty("scope.park.timeout", 120);
     while (System.currentTimeMillis() < mustParkBy)
     {
-      sleepS(1);
+      sleepS(5);
       scopeData = execScript(properties.getProperty("eqmod.scope.data"));
 
       if ("true".equals(scopeData.get("atPark")))
@@ -281,11 +286,13 @@ public class Monitor implements Runnable
     if (System.currentTimeMillis() < mustParkBy)    // timeout
       throw new Exception("Cannot park scope - timeout occured");
 
+    lgr.info("verifying scope park position..");
     float azimuth = Float.parseFloat(scopeData.get("azimuth").toString());
     float altitude = Float.parseFloat(scopeData.get("altitude").toString());
     String logPos = azimuth + ", " + altitude + " (azimuth, altitude)";
-    if (Math.abs(azimuth - getIntProperty("scope.park.Azimuth.check", 3)) > getIntProperty("scope.park.check.error", 10) ||
-      Math.abs(altitude - getIntProperty("scope.park.Altitude.check", 3)) > getIntProperty("scope.park.check.error", 10))
+    final int error = getIntProperty("scope.park.check.error", 10);
+    if (Math.abs(azimuth - getIntProperty("scope.park.Azimuth.check", 3)) > error ||
+      Math.abs(altitude - getIntProperty("scope.park.Altitude.check", 3)) > error)
       throw new Exception("Scope parked in wrong position: " + logPos);
 
     lgr.info("scope parked successfully on: " + logPos);
@@ -293,6 +300,7 @@ public class Monitor implements Runnable
 
   private void roofClose()
   {
+    lgr.info("");
     lgr.info("pre-closing roof..");
     execRelay("relay.roof.pre.close.prepare");
     sleepS(1);
@@ -303,6 +311,7 @@ public class Monitor implements Runnable
 
     sleepS(getFloatProperty("roof.pre.close.pause", 120));
 
+    lgr.info("");
     lgr.info("closing roof..");
     String[] sa = properties.getProperty("roof.close.sequence").split(",");
     double[] closeSequence = new double[sa.length];
@@ -325,6 +334,8 @@ public class Monitor implements Runnable
 
   private void cameraTest()
   {
+    lgr.info("");
+    lgr.info("testing camera..");
     HashMap cameraData = execScript(properties.getProperty("ascom.camera.data"));
     if (cameraData.size() == 0)
       lgr.warn("Cannot access camera");
@@ -335,18 +346,19 @@ public class Monitor implements Runnable
     new Thread(() -> {
       try
       {
+        lgr.info("");
         lgr.info("warming up camera..");
         cameraWarmingUp = true;
         double warmUpSpeed = getFloatProperty("camera.warmup.speed", 0.1f);
         int warmUpStep = 2;   // should be the same as in cameraWarmUp.js
         long warmUpTill = System.currentTimeMillis() + getIntProperty("camera.cooling.off.after", 120);
-        while (warmUpTill-- > 0)
+        while (System.currentTimeMillis() < warmUpTill && cameraWarmingUp)
         {
-          HashMap cameraData = execScript(properties.getProperty("ascom.camera.warm.up"));
+          execScript(properties.getProperty("ascom.camera.warm.up"));
           sleepS(warmUpStep / warmUpSpeed);
         }
 
-        sleepMs(5000);
+        lgr.info("warming up " + (System.currentTimeMillis() < warmUpTill ? "aborted." : "finished."));
       }
       catch (Exception e)
       {
@@ -357,12 +369,12 @@ public class Monitor implements Runnable
     new Thread(() -> {
       try
       {
-        sleepMs(getIntProperty("camera.cooling.off.after", 120));
+        sleepS(getIntProperty("camera.cooling.off.after", 120));
+        lgr.info("");
         lgr.info("powering off camera cooler..");
         execRelay("relay.camera.cooler.off");
         sleepS(1);
-        HashMap cameraData = execScript(properties.getProperty("ascom.camera.data"));
-        lgr.info("camera coolerOn: " + cameraData.get("coolerOn"));
+        execScript(properties.getProperty("ascom.camera.data"));
         cameraWarmingUp = false;
       }
       catch (Exception e)
@@ -385,6 +397,9 @@ public class Monitor implements Runnable
       String line;
       while ((line = br.readLine()) != null)
       {
+        if (line.contains("Microsoft") || line.trim().length() == 0)
+          continue;
+
         lgr.info(line);
         Object[] parsedLine = parseScriptResultLine(line);
         if (parsedLine != null)
@@ -426,7 +441,8 @@ public class Monitor implements Runnable
   {
     try
     {
-      Thread.sleep(ms);
+      while (isAlive && ms-- > 0)
+        Thread.sleep(1);
     }
     catch (InterruptedException e)
     {
@@ -436,14 +452,7 @@ public class Monitor implements Runnable
 
   private void sleepS(double seconds)
   {
-    try
-    {
-      Thread.sleep((int) (1000 * seconds));
-    }
-    catch (InterruptedException e)
-    {
-      lgr.warn(e.getMessage(), e);
-    }
+    sleepMs((int) (1000 * seconds));
   }
 
   private int getIntProperty(String property, int defaultValue)
