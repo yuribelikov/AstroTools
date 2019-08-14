@@ -1,3 +1,3 @@
-java -cp tools.jar bel.astro.tools.Monitor
+java -cp tools.jar bel.astro.tools.monitor.Monitor
 
 @pause

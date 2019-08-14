@@ -1,4 +1,4 @@
-package bel.astro.tools;
+package bel.astro.tools.monitor;
 
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -46,7 +47,6 @@ public class Monitor implements Runnable
 
       reloadProperties();
       testRelay();
-
       testScope();
 
       while (isAlive)
@@ -224,25 +224,11 @@ public class Monitor implements Runnable
     }
   }
 
-  private void testScope()
+  private void testScope() throws Exception
   {
-    try
-    {
-      String command = properties.getProperty("eqmod.check.scope");
-      lgr.info("execute: " + command);
-      Process p = Runtime.getRuntime().exec(command);
-      BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
-      String line;
-      while ((line = br.readLine()) != null)
-      {
-        lgr.info("result: " + line);
-      }
-
-     }
-    catch (Exception e)
-    {
-      lgr.warn(e.getMessage(), e);
-    }
+    HashMap scopeData = execScript(properties.getProperty("eqmod.scope.data"));
+    if (scopeData.size() == 0)
+      throw new Exception("Cannot access scope");
   }
 
   private void shutdown()
@@ -253,7 +239,88 @@ public class Monitor implements Runnable
     sleepMs(1000);
     lgr.info("closing roof..");
     sleepMs(1000);
-    lgr.info("shutdown finished.");
+    cameraWarmup();
+  }
+
+  private void cameraWarmup()
+  {
+    new Thread(() -> {
+      try
+      {
+
+        sleepMs(5000);
+        lgr.info("shutdown finished.");
+        isAlive = false;
+      }
+      catch (Exception e)
+      {
+        lgr.warn(e.getMessage(), e);
+      }
+    }).start();
+  }
+
+  private HashMap execScript(String scriptName)
+  {
+    HashMap<String, Object> results = new HashMap<>();
+    try
+    {
+      String command = properties.getProperty("js.script.cmd");
+      lgr.info("execute: " + command + " " + scriptName);
+      Process p = Runtime.getRuntime().exec(command);
+      BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+      String line;
+      while ((line = br.readLine()) != null)
+      {
+        lgr.info(line);
+        Object[] parsedLine = parseScriptResultLine(line);
+        if (parsedLine != null)
+          results.put(parsedLine[0].toString(), parsedLine[1]);
+      }
+
+      br.close();
+    }
+    catch (Exception e)
+    {
+      lgr.warn(e.getMessage(), e);
+    }
+
+    return results;
+  }
+
+  private Object[] parseScriptResultLine(String line)
+  {
+    try
+    {
+      Object[] result = new String[2];
+      if (line.startsWith("##."))
+      {
+        String[] sa = line.split(" ");
+        result[0] = sa[0].substring(3).trim();    // key
+        result[1] = sa[1].trim();                       // value
+        try
+        {
+          result[1] = Double.parseDouble(result[1].toString());   // try parsing to double
+        }
+        catch (Exception e)
+        {
+          try
+          {
+            result[1] = Boolean.parseBoolean(result[1].toString());   // try parsing to boolean
+          }
+          catch (Exception ignored)
+          {
+          }
+        }
+
+        return result;
+      }
+    }
+    catch (Exception e)
+    {
+      lgr.warn(e.getMessage(), e);
+    }
+
+    return null;
   }
 
   private void sleepMs(long ms)
