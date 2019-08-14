@@ -6,6 +6,7 @@ import org.apache.log4j.PropertyConfigurator;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,6 +46,8 @@ public class Monitor implements Runnable
 
       reloadProperties();
       testRelay();
+
+      testScope();
 
       while (isAlive)
       {
@@ -118,7 +121,7 @@ public class Monitor implements Runnable
           System.out.println("WARNING: relay command property not found: " + property);
         else
         {
-          String command = "cmd /c start " + relayPath + " " + relayCmd;
+          String command = relayPath + " " + relayCmd;
           lgr.info("execute: " + command);
           Process p = Runtime.getRuntime().exec(command);
           sleepMs(1000);
@@ -218,6 +221,27 @@ public class Monitor implements Runnable
     catch (Exception ignored)
     {
       return -1;
+    }
+  }
+
+  private void testScope()
+  {
+    try
+    {
+      String command = properties.getProperty("eqmod.check.scope");
+      lgr.info("execute: " + command);
+      Process p = Runtime.getRuntime().exec(command);
+      BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+      String line;
+      while ((line = br.readLine()) != null)
+      {
+        lgr.info("result: " + line);
+      }
+
+     }
+    catch (Exception e)
+    {
+      lgr.warn(e.getMessage(), e);
     }
   }
 
