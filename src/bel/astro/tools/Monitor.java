@@ -66,7 +66,7 @@ public class Monitor implements Runnable
           lgr.warn("guiding failed and timed out.. starting shutdown sequence..");
           shutdown();
           isAlive = false;
-          sleepS(2);
+          Thread.sleep(2000);   // do not replace by sleepMs()
           break;
         }
 
