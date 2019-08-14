@@ -1,4 +1,4 @@
-package bel.astro.tools.monitor;
+package bel.astro.tools;
 
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
@@ -61,8 +61,6 @@ public class Monitor implements Runnable
         {
           lgr.warn("guiding failed and timed out.. starting shutdown sequence..");
           shutdown();
-          isAlive = false;
-          break;
         }
 
         long checkOn = System.currentTimeMillis() + 1000 * phd2logDelay;
@@ -239,6 +237,7 @@ public class Monitor implements Runnable
     sleepMs(1000);
     lgr.info("closing roof..");
     sleepMs(1000);
+
     cameraWarmup();
   }
 
