@@ -337,7 +337,14 @@ public class Monitor implements Runnable
       {
         lgr.info("warming up camera..");
         cameraWarmingUp = true;
-        // TBD
+        double warmUpSpeed = getFloatProperty("camera.warmup.speed", 0.1f);
+        int warmUpStep = 2;   // should be the same as in cameraWarmUp.js
+        long warmUpTill = System.currentTimeMillis() + getIntProperty("camera.cooling.off.after", 120);
+        while (warmUpTill-- > 0)
+        {
+          HashMap cameraData = execScript(properties.getProperty("ascom.camera.warm.up"));
+          sleepS(warmUpStep / warmUpSpeed);
+        }
 
         sleepMs(5000);
       }
@@ -353,6 +360,9 @@ public class Monitor implements Runnable
         sleepMs(getIntProperty("camera.cooling.off.after", 120));
         lgr.info("powering off camera cooler..");
         execRelay("relay.camera.cooler.off");
+        sleepS(1);
+        HashMap cameraData = execScript(properties.getProperty("ascom.camera.data"));
+        lgr.info("camera coolerOn: " + cameraData.get("coolerOn"));
         cameraWarmingUp = false;
       }
       catch (Exception e)
