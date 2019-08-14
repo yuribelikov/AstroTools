@@ -66,6 +66,7 @@ public class Monitor implements Runnable
           lgr.warn("guiding failed and timed out.. starting shutdown sequence..");
           shutdown();
           isAlive = false;
+          sleepS(2);
           break;
         }
 
@@ -253,7 +254,6 @@ public class Monitor implements Runnable
       lgr.info("");
       lgr.info("shutdown aborted.");
       cameraWarmingUp = false;
-      sleepS(2);
     }
   }
 
