@@ -378,8 +378,8 @@ public class Monitor implements Runnable
     HashMap<String, Object> results = new HashMap<>();
     try
     {
-      String command = properties.getProperty("js.script.cmd");
-      lgr.info("execute: " + command + " " + scriptName);
+      String command = properties.getProperty("js.script.cmd") + " " + scriptName;
+      lgr.info("execute: " + command);
       Process p = Runtime.getRuntime().exec(command);
       BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
       String line;
