@@ -4,9 +4,9 @@ var scope = new ActiveXObject("EQMOD_sim.Telescope");    // Change for your driv
 scope.Connected = true;
 
 WScript.StdOut.WriteLine("##.name: " + scope.Name);
-WScript.StdOut.WriteLine("##.parked: " + scope.AtPark);
+WScript.StdOut.WriteLine("##.atPark: " + scope.AtPark);
 WScript.StdOut.WriteLine("##.slewing: " + scope.Slewing);
-WScript.StdOut.WriteLine("##.altitude: " + scope.Altitude);
 WScript.StdOut.WriteLine("##.azimuth: " + scope.Azimuth);
+WScript.StdOut.WriteLine("##.altitude: " + scope.Altitude);
 WScript.StdOut.WriteLine("##.declination: " + scope.Declination);
 WScript.StdOut.WriteLine("##.rightAscension: " + scope.RightAscension);

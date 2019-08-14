@@ -47,7 +47,8 @@ public class Monitor implements Runnable
 
       reloadProperties();
       testRelay();
-      testScope();
+      scopeTest();
+      cameraTest();
 
       while (isAlive)
       {
@@ -61,6 +62,8 @@ public class Monitor implements Runnable
         {
           lgr.warn("guiding failed and timed out.. starting shutdown sequence..");
           shutdown();
+          isAlive = false;
+          break;
         }
 
         long checkOn = System.currentTimeMillis() + 1000 * phd2logDelay;
@@ -122,7 +125,7 @@ public class Monitor implements Runnable
           String command = relayPath + " " + relayCmd;
           lgr.info("execute: " + command);
           Process p = Runtime.getRuntime().exec(command);
-          sleepMs(1000);
+          sleepMs(getIntProperty("relay.after.exec.delay", 100));
           Monitor.error = p.getErrorStream().read();
         }
       }
@@ -222,23 +225,66 @@ public class Monitor implements Runnable
     }
   }
 
-  private void testScope() throws Exception
+  private void shutdown() throws Exception
   {
-    HashMap scopeData = execScript(properties.getProperty("eqmod.scope.data"));
-    if (scopeData.size() == 0)
-      throw new Exception("Cannot access scope");
-  }
+    lgr.info("main mirrow warming up..");
+    execRelay("relay.main.mirror.warm.on");
 
-  private void shutdown()
-  {
-    lgr.info("parking scope..");
+    cameraWarmup();
+
+    scopePark();
+
     sleepMs(1000);
     lgr.info("checking whether scope parked..");
     sleepMs(1000);
     lgr.info("closing roof..");
     sleepMs(1000);
 
-    cameraWarmup();
+    lgr.info("shutdown finished.");
+  }
+
+  private void scopeTest() throws Exception
+  {
+    HashMap scopeData = execScript(properties.getProperty("eqmod.scope.data"));
+    if (scopeData.size() == 0)
+      throw new Exception("Cannot access scope");
+  }
+
+  private void scopePark() throws Exception
+  {
+    lgr.info("parking scope..");
+    HashMap scopeData = execScript(properties.getProperty("eqmod.scope.park"));
+    if (!scopeData.containsKey("parking"))
+      throw new Exception("Cannot park scope");
+
+    long mustParkBy = System.currentTimeMillis() + getIntProperty("scope.park.timeout", 120);
+    while (System.currentTimeMillis() < mustParkBy)
+    {
+      sleepMs(1000);
+      scopeData = execScript(properties.getProperty("eqmod.scope.data"));
+
+      if ("true".equals(scopeData.get("atPark")))
+        break;
+    }
+
+    if (System.currentTimeMillis() < mustParkBy)    // timeout
+      throw new Exception("Cannot park scope - timeout occured");
+
+    float azimuth = Float.parseFloat(scopeData.get("azimuth").toString());
+    float altitude = Float.parseFloat(scopeData.get("altitude").toString());
+    String logPos = azimuth + ", " + altitude+ " (azimuth, altitude)";
+    if (Math.abs(azimuth - getIntProperty("scope.park.Azimuth.check", 3)) > getIntProperty("scope.park.check.error", 10) ||
+        Math.abs(altitude - getIntProperty("scope.park.Altitude.check", 3)) > getIntProperty("scope.park.check.error", 10))
+      throw new Exception("Scope parked in wrong position: " + logPos);
+
+    lgr.info("scope parked successfully on: " + logPos);
+  }
+
+  private void cameraTest()
+  {
+    HashMap cameraData = execScript(properties.getProperty("ascom.camera.data"));
+    if (cameraData.size() == 0)
+      lgr.warn("Cannot access camera");
   }
 
   private void cameraWarmup()
@@ -246,16 +292,30 @@ public class Monitor implements Runnable
     new Thread(() -> {
       try
       {
+        lgr.info("warming up camera..");
+        // TBD
 
         sleepMs(5000);
-        lgr.info("shutdown finished.");
-        isAlive = false;
       }
       catch (Exception e)
       {
         lgr.warn(e.getMessage(), e);
       }
     }).start();
+
+    new Thread(() -> {
+      try
+      {
+        sleepMs(getIntProperty("camera.cooling.off.after", 120));
+        lgr.info("powering off camera cooler..");
+        execRelay("relay.in.light.on");
+      }
+      catch (Exception e)
+      {
+        lgr.warn(e.getMessage(), e);
+      }
+    }).start();
+
   }
 
   private HashMap execScript(String scriptName)
@@ -293,24 +353,9 @@ public class Monitor implements Runnable
       Object[] result = new String[2];
       if (line.startsWith("##."))
       {
-        String[] sa = line.split(" ");
+        String[] sa = line.split(":");
         result[0] = sa[0].substring(3).trim();    // key
         result[1] = sa[1].trim();                       // value
-        try
-        {
-          result[1] = Double.parseDouble(result[1].toString());   // try parsing to double
-        }
-        catch (Exception e)
-        {
-          try
-          {
-            result[1] = Boolean.parseBoolean(result[1].toString());   // try parsing to boolean
-          }
-          catch (Exception ignored)
-          {
-          }
-        }
-
         return result;
       }
     }
@@ -345,4 +390,5 @@ public class Monitor implements Runnable
       return defaultValue;
     }
   }
+
 }
