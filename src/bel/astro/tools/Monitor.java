@@ -253,6 +253,7 @@ public class Monitor implements Runnable
       lgr.info("");
       lgr.info("shutdown aborted.");
       cameraWarmingUp = false;
+      sleepS(2);
     }
   }
 
