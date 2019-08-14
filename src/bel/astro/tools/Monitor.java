@@ -29,6 +29,8 @@ public class Monitor implements Runnable
   private long guidingFailureTime = -1;
   private boolean guidingWasActive = false;
 
+  private boolean cameraWarmingUp = false;
+
 
   public static void main(String[] args)
   {
@@ -101,9 +103,9 @@ public class Monitor implements Runnable
     lgr.info("testing relay..");
 
     execRelay("relay.in.light.on");
-    sleepMs(1000);
+    sleepS(1);
     execRelay("relay.in.light.off");
-    sleepMs(1100);
+    sleepS(1.1);
     if (error != -1)
       throw new Exception("Cannot access relay");
 
@@ -119,7 +121,7 @@ public class Monitor implements Runnable
         String relayPath = properties.getProperty("relay.path");
         String relayCmd = properties.getProperty(property);
         if (relayCmd == null || relayCmd.length() == 0)
-          System.out.println("WARNING: relay command property not found: " + property);
+          lgr.warn("WARNING: relay command property not found: " + property);
         else
         {
           String command = relayPath + " " + relayCmd;
@@ -227,20 +229,29 @@ public class Monitor implements Runnable
 
   private void shutdown() throws Exception
   {
-    lgr.info("main mirrow warming up..");
-    execRelay("relay.main.mirror.warm.on");
+    try
+    {
+      lgr.info("main mirrow warming up..");
+      execRelay("relay.main.mirror.warm.on");
 
-    cameraWarmup();
+      cameraWarmup();
 
-    scopePark();
+      scopePark();
 
-    sleepMs(1000);
-    lgr.info("checking whether scope parked..");
-    sleepMs(1000);
-    lgr.info("closing roof..");
-    sleepMs(1000);
+      roofClose();
 
-    lgr.info("shutdown finished.");
+      while (cameraWarmingUp)
+        sleepMs(100);
+
+      lgr.info("shutdown finished.");
+    }
+    catch (Exception e)
+    {
+      lgr.warn(e.getMessage(), e);
+      execRelay("relay.camera.cooler.off");
+      sleepS(1);
+      throw e;
+    }
   }
 
   private void scopeTest() throws Exception
@@ -260,7 +271,7 @@ public class Monitor implements Runnable
     long mustParkBy = System.currentTimeMillis() + getIntProperty("scope.park.timeout", 120);
     while (System.currentTimeMillis() < mustParkBy)
     {
-      sleepMs(1000);
+      sleepS(1);
       scopeData = execScript(properties.getProperty("eqmod.scope.data"));
 
       if ("true".equals(scopeData.get("atPark")))
@@ -272,12 +283,44 @@ public class Monitor implements Runnable
 
     float azimuth = Float.parseFloat(scopeData.get("azimuth").toString());
     float altitude = Float.parseFloat(scopeData.get("altitude").toString());
-    String logPos = azimuth + ", " + altitude+ " (azimuth, altitude)";
+    String logPos = azimuth + ", " + altitude + " (azimuth, altitude)";
     if (Math.abs(azimuth - getIntProperty("scope.park.Azimuth.check", 3)) > getIntProperty("scope.park.check.error", 10) ||
-        Math.abs(altitude - getIntProperty("scope.park.Altitude.check", 3)) > getIntProperty("scope.park.check.error", 10))
+      Math.abs(altitude - getIntProperty("scope.park.Altitude.check", 3)) > getIntProperty("scope.park.check.error", 10))
       throw new Exception("Scope parked in wrong position: " + logPos);
 
     lgr.info("scope parked successfully on: " + logPos);
+  }
+
+  private void roofClose()
+  {
+    lgr.info("pre-closing roof..");
+    execRelay("relay.roof.pre.close.prepare");
+    sleepS(1);
+    execRelay("relay.roof.pre.close.start");
+    sleepS(getFloatProperty("roof.pre.close.cmd.duration", 3.0f));
+    execRelay("relay.roof.pre.close.stop");
+    lgr.info("roof pre-closed.");
+
+    sleepS(getFloatProperty("roof.pre.close.pause", 120));
+
+    lgr.info("closing roof..");
+    String[] sa = properties.getProperty("roof.close.sequence").split(",");
+    double[] closeSequence = new double[sa.length];
+    for (int i = 0; i < sa.length; i++)
+      closeSequence[i] = Double.parseDouble(sa[i].trim());
+
+    execRelay("relay.roof.close.start");
+    for (int i = 0; i < closeSequence.length; i++)
+    {
+      sleepS(closeSequence[i]);
+      if (i % 2 == 0)       // roof.close.sequence = 0.5, 10, 0.5, 10, 0.5, 10
+        execRelay("relay.roof.move.off");
+      else
+        execRelay("relay.roof.move.on");
+    }
+
+    execRelay("relay.roof.all.off");
+    lgr.info("roof closed.");
   }
 
   private void cameraTest()
@@ -293,6 +336,7 @@ public class Monitor implements Runnable
       try
       {
         lgr.info("warming up camera..");
+        cameraWarmingUp = true;
         // TBD
 
         sleepMs(5000);
@@ -308,7 +352,8 @@ public class Monitor implements Runnable
       {
         sleepMs(getIntProperty("camera.cooling.off.after", 120));
         lgr.info("powering off camera cooler..");
-        execRelay("relay.in.light.on");
+        execRelay("relay.camera.cooler.off");
+        cameraWarmingUp = false;
       }
       catch (Exception e)
       {
@@ -379,11 +424,35 @@ public class Monitor implements Runnable
     }
   }
 
+  private void sleepS(double seconds)
+  {
+    try
+    {
+      Thread.sleep((int) (1000 * seconds));
+    }
+    catch (InterruptedException e)
+    {
+      lgr.warn(e.getMessage(), e);
+    }
+  }
+
   private int getIntProperty(String property, int defaultValue)
   {
     try
     {
       return Integer.parseInt(properties.getProperty(property));
+    }
+    catch (Exception ignored)
+    {
+      return defaultValue;
+    }
+  }
+
+  private float getFloatProperty(String property, float defaultValue)
+  {
+    try
+    {
+      return Float.parseFloat(properties.getProperty(property));
     }
     catch (Exception ignored)
     {
