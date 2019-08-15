@@ -50,7 +50,7 @@ public class Monitor implements Runnable
       reloadProperties();
       testRelay();
       scopeTest();
-      cameraTest();
+//      cameraTest();
 
       while (isAlive)
       {
@@ -236,15 +236,18 @@ public class Monitor implements Runnable
       lgr.info("starting main mirrow warmup..");
       execRelay("relay.main.mirror.warm.on");
 
-      cameraWarmup();
+//      cameraWarmup();
+      lgr.info("");
+      lgr.info("powering off camera cooler..");
+      execRelay("relay.camera.cooler.off");
 
-      sleepS(3);
+//      sleepS(3);
       scopePark();
 
       roofClose();
 
-      while (cameraWarmingUp)
-        sleepMs(100);
+//      while (cameraWarmingUp)
+//        sleepMs(100);
 
       lgr.info("shutdown finished.");
     }
@@ -253,7 +256,7 @@ public class Monitor implements Runnable
       lgr.warn(e.getMessage(), e);
       lgr.info("");
       lgr.info("shutdown aborted.");
-      cameraWarmingUp = false;
+//      cameraWarmingUp = false;
     }
   }
 
@@ -292,8 +295,8 @@ public class Monitor implements Runnable
     float altitude = Float.parseFloat(scopeData.get("altitude").toString());
     String logPos = azimuth + ", " + altitude + " (azimuth, altitude)";
     final int error = getIntProperty("scope.park.check.error", 10);
-    if (Math.abs(azimuth - getIntProperty("scope.park.Azimuth.check", 3)) > error ||
-      Math.abs(altitude - getIntProperty("scope.park.Altitude.check", 3)) > error)
+    if (Math.abs(azimuth - getIntProperty("scope.park.azimuth.check", 3)) > error ||
+      Math.abs(altitude - getIntProperty("scope.park.altitude.check", 3)) > error)
       throw new Exception("Scope parked in wrong position: " + logPos);
 
     lgr.info("scope parked successfully on: " + logPos);
