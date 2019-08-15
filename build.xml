@@ -4,7 +4,7 @@
         <copy todir="D:/YandexDisk/astro/tools/bel">
             <fileset dir="." includes="src/**/*"/>
             <fileset dir="." includes="lib/*"/>
-            <fileset dir="." includes="*.*"/>
+            <fileset dir="." includes="*.jar"/>
         </copy>
     </target>
 

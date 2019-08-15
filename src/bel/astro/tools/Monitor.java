@@ -235,15 +235,19 @@ public class Monitor implements Runnable
     {
       lgr.info("starting main mirrow warmup..");
       execRelay("relay.main.mirror.warm.on");
+      sleepS(1);
 
 //      cameraWarmup();
       lgr.info("");
       lgr.info("powering off camera cooler..");
       execRelay("relay.camera.cooler.off");
+      sleepS(1);
 
 //      sleepS(3);
       scopePark();
 
+      roofPreClose();
+      scopePark();    // this double checks the scope park position - do not remove!
       roofClose();
 
 //      while (cameraWarmingUp)
@@ -277,7 +281,7 @@ public class Monitor implements Runnable
     if (!scopeData.containsKey("parking"))
       throw new Exception("Cannot park scope");
 
-    long mustParkBy = System.currentTimeMillis() + getIntProperty("scope.park.timeout", 120);
+    long mustParkBy = System.currentTimeMillis() + 1000 * getIntProperty("scope.park.timeout", 120);
     while (System.currentTimeMillis() < mustParkBy)
     {
       sleepS(5);
@@ -287,22 +291,27 @@ public class Monitor implements Runnable
         break;
     }
 
-    if (System.currentTimeMillis() < mustParkBy)    // timeout
+    if (System.currentTimeMillis() >= mustParkBy)    // timeout
       throw new Exception("Cannot park scope - timeout occured");
 
+    lgr.info("");
+    lgr.info("scope parked.");
+    lgr.info("");
     lgr.info("verifying scope park position..");
     float azimuth = Float.parseFloat(scopeData.get("azimuth").toString());
     float altitude = Float.parseFloat(scopeData.get("altitude").toString());
     String logPos = azimuth + ", " + altitude + " (azimuth, altitude)";
-    final int error = getIntProperty("scope.park.check.error", 10);
-    if (Math.abs(azimuth - getIntProperty("scope.park.azimuth.check", 3)) > error ||
-      Math.abs(altitude - getIntProperty("scope.park.altitude.check", 3)) > error)
+    final int maxError = getIntProperty("scope.park.check.error", 10);
+    final float azError = Math.abs(azimuth - getIntProperty("scope.park.azimuth.check", 3));
+    final float altError = Math.abs(altitude - getIntProperty("scope.park.altitude.check", 3));
+    lgr.info("azError: " + azError + ", altError: " + altError);
+    if (azError > maxError || altError > maxError)
       throw new Exception("Scope parked in wrong position: " + logPos);
 
     lgr.info("scope parked successfully on: " + logPos);
   }
 
-  private void roofClose()
+  private void roofPreClose()
   {
     lgr.info("");
     lgr.info("pre-closing roof..");
@@ -314,7 +323,10 @@ public class Monitor implements Runnable
     lgr.info("roof pre-closed.");
 
     sleepS(getFloatProperty("roof.pre.close.pause", 120));
+  }
 
+  private void roofClose()
+  {
     lgr.info("");
     lgr.info("closing roof..");
     String[] sa = properties.getProperty("roof.close.sequence").split(",");
