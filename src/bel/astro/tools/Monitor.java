@@ -36,7 +36,7 @@ public class Monitor implements Runnable
   {
     PropertyConfigurator.configure("log4j.properties");
     if (args.length > 0 && args[0].equals("-s"))
-      new Monitor().shutdown();
+      new Monitor().shutdown(true);
     else
       new Monitor().thread.start();
   }
@@ -59,24 +59,23 @@ public class Monitor implements Runnable
       {
         lgr.info("");
         reloadProperties();
-        int phd2logDelay = getIntProperty("phd2.log.check.delay", 15);
-        lgr.info("phd2logDelay: " + phd2logDelay + " seconds");
+        int checkDelay = getIntProperty("check.delay", 10);
+        lgr.info("checkDelay: " + checkDelay + " seconds");
 
-        boolean guidingFine = analysePhd2logFile();
-        if (!guidingFine)
+        if (!poweredOn())
+        {
+          lgr.info("");
+          lgr.warn("power is off and timed out..");
+          shutdown(true);
+        }
+        else if (!guidingFine())
         {
           lgr.info("");
           lgr.warn("guiding failed and timed out..");
-          shutdown();
-          isAlive = false;
-          Thread.sleep(2000);   // do not replace by sleepMs()
-          break;
+          shutdown(false);
         }
 
-        long checkOn = System.currentTimeMillis() + 1000 * phd2logDelay;
-        while (System.currentTimeMillis() < checkOn)
-          Thread.sleep(100);
-
+        sleepS(checkDelay);
       }
     }
     catch (Exception e)
@@ -103,48 +102,23 @@ public class Monitor implements Runnable
     }
   }
 
-  private void testRelay() throws Exception
+  private boolean poweredOn()
   {
-    lgr.info("");
-    lgr.info("testing relay..");
-    execRelay("relay.in.light.on");
-    sleepS(1);
-    execRelay("relay.in.light.off");
-    sleepS(1.1);
-    if (error != -1)
-      throw new Exception("Cannot access relay");
-
-    lgr.info("relay is ok");
+    final Path powerOffFile = Paths.get(properties.getProperty("power.off.file"));
+    if (Files.exists(powerOffFile))
+    {
+      final long poweredOffAgo = (System.currentTimeMillis() - powerOffFile.toFile().lastModified()) / 1000;
+      lgr.warn("no power for " + poweredOffAgo + " seconds");
+      return poweredOffAgo < getIntProperty("power.failure.timeout", 30);
+    }
+    else
+    {
+      lgr.info("power is on");
+      return true;
+    }
   }
 
-  private void execRelay(String property)
-  {
-    error = 0;
-    new Thread(() -> {
-      try
-      {
-        String relayPath = properties.getProperty("relay.path");
-        String relayCmd = properties.getProperty(property);
-        if (relayCmd == null || relayCmd.length() == 0)
-          lgr.warn("WARNING: relay command property not found: " + property);
-        else
-        {
-          String command = relayPath + " " + relayCmd;
-          lgr.info("execute: " + command);
-          Process p = Runtime.getRuntime().exec(command);
-          sleepMs(getIntProperty("relay.after.exec.delay", 100));
-          Monitor.error = p.getErrorStream().read();
-        }
-      }
-      catch (IOException e)
-      {
-        lgr.warn(e.getMessage(), e);
-        Monitor.error = 1;
-      }
-    }).start();
-  }
-
-  private boolean analysePhd2logFile()    // return true if guiding is in progress or recently failed; false if failed and failure timeout occured
+  private boolean guidingFine()    // return true if guiding is in progress or recently failed; false if failed and failure timeout occured
   {
     try
     {
@@ -232,7 +206,7 @@ public class Monitor implements Runnable
     }
   }
 
-  private void shutdown()
+  private void shutdown(boolean fast)
   {
     try
     {
@@ -257,7 +231,7 @@ public class Monitor implements Runnable
 //      sleepS(3);
       scopePark();
 
-      roofPreClose();
+      roofPreClose(fast);
       scopePark();    // this double checks the scope park position - do not remove!
       roofClose();
 
@@ -273,6 +247,10 @@ public class Monitor implements Runnable
       lgr.info("shutdown aborted.");
 //      cameraWarmingUp = false;
     }
+
+//    Thread.sleep(2000);   // do not replace by sleepMs()
+    sleepS(2);
+    isAlive = false;
   }
 
   private void scopeTest() throws Exception
@@ -322,7 +300,7 @@ public class Monitor implements Runnable
     lgr.info("scope parked successfully on: " + logPos);
   }
 
-  private void roofPreClose()
+  private void roofPreClose(boolean fast)
   {
     lgr.info("");
     lgr.info("pre-closing roof..");
@@ -333,7 +311,7 @@ public class Monitor implements Runnable
     execRelay("relay.roof.pre.close.stop");
     lgr.info("roof pre-closed.");
 
-    sleepS(isAlive ? getFloatProperty("roof.pre.close.pause", 120) : 5);    // monitor and shutdown or just shutdown (-s)
+    sleepS(fast ? 5 : getFloatProperty("roof.pre.close.pause", 120));
   }
 
   private void roofClose()
@@ -465,12 +443,54 @@ public class Monitor implements Runnable
     return null;
   }
 
+  private void testRelay() throws Exception
+  {
+    lgr.info("");
+    lgr.info("testing relay..");
+    execRelay("relay.in.light.on");
+    sleepS(1);
+    execRelay("relay.in.light.off");
+    sleepS(1.1);
+    if (error != -1)
+      throw new Exception("Cannot access relay");
+
+    lgr.info("relay is ok");
+  }
+
+  private void execRelay(String property)
+  {
+    error = 0;
+    new Thread(() -> {
+      try
+      {
+        String relayPath = properties.getProperty("relay.path");
+        String relayCmd = properties.getProperty(property);
+        if (relayCmd == null || relayCmd.length() == 0)
+          lgr.warn("WARNING: relay command property not found: " + property);
+        else
+        {
+          String command = relayPath + " " + relayCmd;
+          lgr.info("execute: " + command);
+          Process p = Runtime.getRuntime().exec(command);
+          sleepMs(getIntProperty("relay.after.exec.delay", 100));
+          Monitor.error = p.getErrorStream().read();
+        }
+      }
+      catch (IOException e)
+      {
+        lgr.warn(e.getMessage(), e);
+        Monitor.error = 1;
+      }
+    }).start();
+  }
+
   private void sleepMs(long ms)
   {
     try
     {
-      while (isAlive && ms-- > 0)
-        Thread.sleep(1);
+      long sleepBy = System.currentTimeMillis() + ms;
+      while (isAlive && System.currentTimeMillis() < sleepBy)
+        Thread.sleep(5);
     }
     catch (InterruptedException e)
     {
