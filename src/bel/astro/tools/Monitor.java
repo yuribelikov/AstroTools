@@ -46,11 +46,11 @@ public class Monitor implements Runnable
   {
     try
     {
-      lgr.info("");
-      lgr.info("");
-      lgr.info("Astro Monitor started");
-
       reloadProperties();
+      lgr.info("");
+      lgr.info("");
+      lgr.info("Astro Monitor started" + ("true".equals(properties.getProperty("emulation")) ? " in emulation mode" : ""));
+
       testRelay();
       scopeTest();
 //      cameraTest();
@@ -393,10 +393,17 @@ public class Monitor implements Runnable
 
   private HashMap execScript(String scriptName)
   {
-    HashMap<String, Object> results = new HashMap<>();
+    HashMap<String, String> results = new HashMap<>();
     try
     {
-      String command = properties.getProperty("js.script.cmd") + " " + scriptName;
+      String emulationPrefix = " ";
+      if ("true".equals(properties.getProperty("emulation")))
+      {
+        lgr.info("emulation mode - using simulator scripts..");
+        emulationPrefix = " sim_";
+      }
+
+      String command = properties.getProperty("js.script.cmd") + emulationPrefix + scriptName;
       lgr.info("execute: " + command);
       Process p = Runtime.getRuntime().exec(command);
       BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
@@ -407,9 +414,9 @@ public class Monitor implements Runnable
           continue;
 
         lgr.info(line);
-        Object[] parsedLine = parseScriptResultLine(line);
+        String[] parsedLine = parseScriptResultLine(line);
         if (parsedLine != null)
-          results.put(parsedLine[0].toString(), parsedLine[1]);
+          results.put(parsedLine[0], parsedLine[1]);
       }
 
       br.close();
@@ -422,11 +429,11 @@ public class Monitor implements Runnable
     return results;
   }
 
-  private Object[] parseScriptResultLine(String line)
+  private String[] parseScriptResultLine(String line)
   {
     try
     {
-      Object[] result = new String[2];
+      String[] result = new String[2];
       if (line.startsWith("##."))
       {
         String[] sa = line.split(":");
@@ -447,10 +454,8 @@ public class Monitor implements Runnable
   {
     lgr.info("");
     lgr.info("testing relay..");
-    execRelay("relay.in.light.on");
+    execRelay("relay.test");
     sleepS(1);
-    execRelay("relay.in.light.off");
-    sleepS(1.1);
     if (error != -1)
       throw new Exception("Cannot access relay");
 
@@ -471,9 +476,17 @@ public class Monitor implements Runnable
         {
           String command = relayPath + " " + relayCmd;
           lgr.info("execute: " + command);
+          if ("true".equals(properties.getProperty("emulation")))
+          {
+            lgr.info("emulation mode - no real action..");
+            error = -1;
+            return;
+          }
+
           Process p = Runtime.getRuntime().exec(command);
           sleepMs(getIntProperty("relay.after.exec.delay", 100));
           Monitor.error = p.getErrorStream().read();
+
         }
       }
       catch (IOException e)
