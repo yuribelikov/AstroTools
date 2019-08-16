@@ -29,13 +29,16 @@ public class Monitor implements Runnable
   private long guidingFailureTime = -1;
   private boolean guidingWasActive = false;
 
-  private boolean cameraWarmingUp = false;
+//  private boolean cameraWarmingUp = false;
 
 
   public static void main(String[] args)
   {
     PropertyConfigurator.configure("log4j.properties");
-    new Monitor().thread.start();
+    if (args.length > 0 && args[0].equals("-s"))
+      new Monitor().shutdown();
+    else
+      new Monitor().thread.start();
   }
 
   @Override
@@ -63,7 +66,7 @@ public class Monitor implements Runnable
         if (!guidingFine)
         {
           lgr.info("");
-          lgr.warn("guiding failed and timed out.. starting shutdown sequence..");
+          lgr.warn("guiding failed and timed out..");
           shutdown();
           isAlive = false;
           Thread.sleep(2000);   // do not replace by sleepMs()
@@ -233,15 +236,23 @@ public class Monitor implements Runnable
   {
     try
     {
+      reloadProperties();
+
+      lgr.info("");
+      lgr.warn("starting shutdown sequence..");
+      lgr.info("");
       lgr.info("starting main mirrow warmup..");
       execRelay("relay.main.mirror.warm.on");
       sleepS(1);
 
 //      cameraWarmup();
-      lgr.info("");
-      lgr.info("powering off camera cooler..");
-      execRelay("relay.camera.cooler.off");
-      sleepS(1);
+      if ("true".equals(properties.getProperty("camera.cooler.off")))
+      {
+        lgr.info("");
+        lgr.info("powering off camera cooler..");
+        execRelay("relay.camera.cooler.off");
+        sleepS(1);
+      }
 
 //      sleepS(3);
       scopePark();
@@ -322,7 +333,7 @@ public class Monitor implements Runnable
     execRelay("relay.roof.pre.close.stop");
     lgr.info("roof pre-closed.");
 
-    sleepS(getFloatProperty("roof.pre.close.pause", 120));
+    sleepS(isAlive ? getFloatProperty("roof.pre.close.pause", 120) : 5);    // monitor and shutdown or just shutdown (-s)
   }
 
   private void roofClose()
@@ -348,6 +359,7 @@ public class Monitor implements Runnable
     lgr.info("roof closed.");
   }
 
+/*
   private void cameraTest()
   {
     lgr.info("");
@@ -398,8 +410,8 @@ public class Monitor implements Runnable
         lgr.warn(e.getMessage(), e);
       }
     }).start();
-
   }
+*/
 
   private HashMap execScript(String scriptName)
   {
