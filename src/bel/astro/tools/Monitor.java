@@ -213,7 +213,7 @@ public class Monitor implements Runnable
       reloadProperties();
 
       lgr.info("");
-      lgr.warn("starting shutdown sequence..");
+      lgr.warn("starting " + (fast ? "fast " : "") + "shutdown sequence..");
       lgr.info("");
       lgr.info("starting main mirrow warmup..");
       execRelay("relay.main.mirror.warm.on");
