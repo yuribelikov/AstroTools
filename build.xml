@@ -1,7 +1,7 @@
 <project name="Astro Tools">
 
     <target name="copy to YD">
-        <copy todir="D:/YandexDisk/astro/tools/bel">
+        <copy todir="C:/Users/Yuri/YandexDisk/astro/tools/bel">
             <fileset dir="." includes="src/**/*"/>
             <fileset dir="." includes="lib/*"/>
             <fileset dir="." includes="*.jar"/>
