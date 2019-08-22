@@ -531,14 +531,25 @@ public class Monitor implements Runnable
         return;
       }
 
-      lgr.info("current temp: " + tempSensor +" = " + currTemp);
+      lgr.info("current temp: " + tempSensor + " = " + currTemp);
       if (startTemp == Float.MIN_VALUE)
       {
         lgr.info("setting start temperature to: " + currTemp);
+        startTemp = currTemp;
         return;
       }
 
-      float tempDiff = currTemp - startTemp;
+      float diff = currTemp - startTemp;
+      float compensation = diff * getIntProperty("focuser.compensation", -100);
+      int focuserStepSize = getIntProperty("focuser.step.size", 10);
+      lgr.info("diff with " + startTemp + " is " + diff + ", compensation: " + compensation + ", focuserPosition : " + focuserPosition);
+      if (Math.abs(compensation - focuserPosition) >= focuserStepSize)
+      {
+        String dir = compensation > focuserPosition ? "up" : "down";
+        execScript(properties.getProperty("focuser." + dir + ".script"));
+        focuserPosition += compensation > focuserPosition ? focuserStepSize : -focuserStepSize;
+        lgr.info("focuserPosition: " + focuserPosition);
+      }
 
     }
     catch (Exception e)

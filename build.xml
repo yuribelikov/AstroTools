@@ -5,6 +5,7 @@
             <fileset dir="." includes="src/**/*"/>
             <fileset dir="." includes="lib/*"/>
             <fileset dir="." includes="*.jar"/>
+            <fileset dir="." includes="*.js"/>
         </copy>
     </target>
 

@@ -1,6 +1,6 @@
-var scope = new ActiveXObject("EQMOD_sim.Telescope");    // Change for your driver's ID
+//var scope = new ActiveXObject("EQMOD_sim.Telescope");    // Change for your driver's ID
 //var scope = new ActiveXObject("ASCOM.Simulator.Telescope"); 
-//var scope = new ActiveXObject("EQMOD.Telescope");    // Change for your driver's ID
+var scope = new ActiveXObject("EQMOD.Telescope");    // Change for your driver's ID
 scope.Connected = true;
 
 WScript.StdOut.WriteLine("##.name: " + scope.Name);
