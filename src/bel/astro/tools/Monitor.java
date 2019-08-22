@@ -29,7 +29,7 @@ public class Monitor implements Runnable
   private long guidingFailureTime = -1;
   private boolean guidingWasActive = false;
 
-  private int startTemp = -1;
+  private float startTemp = Float.MIN_VALUE;
   private int focuserPosition = 0;
 
 
@@ -532,6 +532,13 @@ public class Monitor implements Runnable
       }
 
       lgr.info("current temp: " + tempSensor +" = " + currTemp);
+      if (startTemp == Float.MIN_VALUE)
+      {
+        lgr.info("setting start temperature to: " + currTemp);
+        return;
+      }
+
+      float tempDiff = currTemp - startTemp;
 
     }
     catch (Exception e)
