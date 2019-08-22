@@ -29,7 +29,8 @@ public class Monitor implements Runnable
   private long guidingFailureTime = -1;
   private boolean guidingWasActive = false;
 
-//  private boolean cameraWarmingUp = false;
+  private int startTemp = -1;
+  private int focuserPosition = 0;
 
 
   public static void main(String[] args)
@@ -68,13 +69,14 @@ public class Monitor implements Runnable
           lgr.warn("power is off and timed out..");
           shutdown(true);
         }
-        else if (!guidingFine())
+        else if (!checkGuiding())
         {
           lgr.info("");
           lgr.warn("guiding failed and timed out..");
           shutdown(false);
         }
 
+        focuserTempCompensation();
         sleepS(checkDelay);
       }
     }
@@ -118,15 +120,15 @@ public class Monitor implements Runnable
     }
   }
 
-  private boolean guidingFine()    // return true if guiding is in progress or recently failed; false if failed and failure timeout occured
+  private boolean checkGuiding()    // return true if guiding is in progress or recently failed; false if failed and failure timeout occured
   {
     try
     {
       String phd2logDir = properties.getProperty("phd2.log.dir");
       Path dir = Paths.get(phd2logDir);  // specify your directory
       Optional<Path> lastFilePath = Files.list(dir)    // here we get the stream with full directory listing
-        .filter(f -> !Files.isDirectory(f) && f.getFileName().toString().startsWith("PHD2_GuideLog"))  // exclude subdirectories from listing
-        .max(Comparator.comparingLong(f -> f.toFile().lastModified()));  // finally get the last file using simple comparator by lastModified field
+              .filter(f -> !Files.isDirectory(f) && f.getFileName().toString().startsWith("PHD2_GuideLog"))  // exclude subdirectories from listing
+              .max(Comparator.comparingLong(f -> f.toFile().lastModified()));  // finally get the last file using simple comparator by lastModified field
 
       if (!lastFilePath.isPresent()) // your folder may be empty
       {
@@ -215,11 +217,15 @@ public class Monitor implements Runnable
       lgr.info("");
       lgr.warn("starting " + (fast ? "fast " : "") + "shutdown sequence..");
       lgr.info("");
+      lgr.info("light on..");
+      execRelay("relay.light.out.on");
+      sleepS(1);
+
+      lgr.info("");
       lgr.info("starting main mirrow warmup..");
       execRelay("relay.main.mirror.warm.on");
       sleepS(1);
 
-//      cameraWarmup();
       if ("true".equals(properties.getProperty("camera.cooler.off")))
       {
         lgr.info("");
@@ -228,15 +234,12 @@ public class Monitor implements Runnable
         sleepS(1);
       }
 
-//      sleepS(3);
       scopePark();
+      sleepS(1);
 
       roofPreClose(fast);
       scopePark();    // this double checks the scope park position - do not remove!
       roofClose();
-
-//      while (cameraWarmingUp)
-//        sleepMs(100);
 
       lgr.info("shutdown finished.");
     }
@@ -245,10 +248,12 @@ public class Monitor implements Runnable
       lgr.warn(e.getMessage(), e);
       lgr.info("");
       lgr.info("shutdown aborted.");
-//      cameraWarmingUp = false;
     }
 
-//    Thread.sleep(2000);   // do not replace by sleepMs()
+    sleepS(1);
+    lgr.info("light off..");
+    execRelay("relay.light.out.off");
+
     sleepS(2);
     isAlive = false;
   }
@@ -311,7 +316,9 @@ public class Monitor implements Runnable
     execRelay("relay.roof.pre.close.stop");
     lgr.info("roof pre-closed.");
 
-    sleepS(fast ? 5 : getFloatProperty("roof.pre.close.pause", 120));
+    float wait = fast ? 5 : getFloatProperty("roof.pre.close.pause", 120);
+    lgr.info("waiting for " + wait + "seconds");
+    sleepS(wait);
   }
 
   private void roofClose()
@@ -465,7 +472,8 @@ public class Monitor implements Runnable
   private void execRelay(String property)
   {
     error = 0;
-    new Thread(() -> {
+    new Thread(() ->
+    {
       try
       {
         String relayPath = properties.getProperty("relay.path");
@@ -495,6 +503,41 @@ public class Monitor implements Runnable
         Monitor.error = 1;
       }
     }).start();
+  }
+
+  private void focuserTempCompensation()
+  {
+    lgr.info("");
+    try
+    {
+      String tempFile = properties.getProperty("temp.file");
+      String tempSensor = properties.getProperty("temp.sensor");
+      lgr.info("getting current temperature from: " + tempFile);
+      BufferedReader reader = Files.newBufferedReader(Paths.get(tempFile), StandardCharsets.UTF_8);
+      String line;
+      float currTemp = Float.MIN_VALUE;
+      if ((line = reader.readLine()) != null)
+      {
+        int pos = line.indexOf(tempSensor);
+        if (pos != -1)
+          currTemp = Float.parseFloat(line.substring(pos + tempSensor.length() + 1, line.indexOf(" ", pos)).replace(",", "."));
+      }
+      else
+        lgr.warn("no data in temp file..");
+
+      if (currTemp == Float.MIN_VALUE)
+      {
+        lgr.warn("cannot get " + tempSensor + " value from line: " + line);
+        return;
+      }
+
+      lgr.info("current temp: " + tempSensor +" = " + currTemp);
+
+    }
+    catch (Exception e)
+    {
+      lgr.warn(e.getMessage(), e);
+    }
   }
 
   private void sleepMs(long ms)
