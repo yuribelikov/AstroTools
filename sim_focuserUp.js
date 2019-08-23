@@ -3,7 +3,7 @@ var focuser = new ActiveXObject("ASCOM.Simulator.Focuser");    // Change for you
 focuser.Link = true;
 
 var step = 10;
-WScript.StdOut.WriteLine("move up on: " + step);
+WScript.StdOut.WriteLine("move on: " + step + " (up)");
 
 focuser.Move(step);
 
