@@ -54,7 +54,6 @@ public class Monitor implements Runnable
 
       testRelay();
       scopeTest();
-//      cameraTest();
 
       while (isAlive)
       {
@@ -343,60 +342,6 @@ public class Monitor implements Runnable
     execRelay("relay.roof.all.off");
     lgr.info("roof closed.");
   }
-
-/*
-  private void cameraTest()
-  {
-    lgr.info("");
-    lgr.info("testing camera..");
-    HashMap cameraData = execScript(properties.getProperty("ascom.camera.data"));
-    if (cameraData.size() == 0)
-      lgr.warn("Cannot access camera");
-  }
-
-  private void cameraWarmup()
-  {
-    new Thread(() -> {
-      try
-      {
-        lgr.info("");
-        lgr.info("warming up camera..");
-        cameraWarmingUp = true;
-        double warmUpSpeed = getFloatProperty("camera.warmup.speed", 0.1f);
-        int warmUpStep = 2;   // should be the same as in cameraWarmUp.js
-        long warmUpTill = System.currentTimeMillis() + getIntProperty("camera.cooling.off.after", 120);
-        while (System.currentTimeMillis() < warmUpTill && cameraWarmingUp)
-        {
-          execScript(properties.getProperty("ascom.camera.warm.up"));
-          sleepS(warmUpStep / warmUpSpeed);
-        }
-
-        lgr.info("warming up " + (System.currentTimeMillis() < warmUpTill ? "aborted." : "finished."));
-      }
-      catch (Exception e)
-      {
-        lgr.warn(e.getMessage(), e);
-      }
-    }).start();
-
-    new Thread(() -> {
-      try
-      {
-        sleepS(getIntProperty("camera.cooling.off.after", 120));
-        lgr.info("");
-        lgr.info("powering off camera cooler..");
-        execRelay("relay.camera.cooler.off");
-        sleepS(1);
-        execScript(properties.getProperty("ascom.camera.data"));
-        cameraWarmingUp = false;
-      }
-      catch (Exception e)
-      {
-        lgr.warn(e.getMessage(), e);
-      }
-    }).start();
-  }
-*/
 
   private HashMap execScript(String scriptName)
   {
