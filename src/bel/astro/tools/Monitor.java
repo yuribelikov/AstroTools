@@ -3,6 +3,8 @@ package bel.astro.tools;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
+import javax.swing.*;
+import java.awt.*;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -11,14 +13,17 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.Properties;
 
 
-public class Monitor implements Runnable
+public class Monitor extends JFrame implements Runnable
 {
+  private static SimpleDateFormat df1 = new SimpleDateFormat("HH:mm:ss");
   private static Logger lgr = Logger.getLogger(Monitor.class.getName());
   private static int error = 0;
   private Properties properties = new Properties();
@@ -29,17 +34,70 @@ public class Monitor implements Runnable
   private long guidingFailureTime = -1;
   private boolean guidingWasActive = false;
 
-  private float startTemp = Float.MIN_VALUE;
+  private float startAirTemp = Float.MIN_VALUE;
   private int focuserPosition = 0;
 
+  private Rectangle windowRect = new Rectangle(100, 100, 500, 300);
+  private Label statusTimeL = new Label();
+  private Label powerStatusL = new Label();
+  private Label gudingStatusL = new Label();
+  private Label gudingStatusInfoL = new Label();
+  private Label thermoStabilizationL = new Label();
+  private Label thermoStabilizationInfoL = new Label();
+  private Label focusCompensationL = new Label();
+
+
+  public Monitor() throws HeadlessException
+  {
+    setTitle("Monitor");
+    setLayout(null);
+
+    Label stL = new Label("Status updated on:");
+    add(stL);
+    stL.setBounds(5, 10, 110, 20);
+    add(statusTimeL);
+    statusTimeL.setBounds(115, 10, 85, 20);
+
+    Label pwrL = new Label("Power:");
+    add(pwrL);
+    pwrL.setBounds(200, 10, 40, 20);
+    add(powerStatusL);
+    powerStatusL.setBounds(250, 10, 130, 20);
+
+    Label gsL = new Label("Guiding:");
+    add(gsL);
+    gsL.setBounds(5, 40, 50, 20);
+    add(gudingStatusL);
+    gudingStatusL.setBounds(60, 40, 50, 20);
+    add(gudingStatusInfoL);
+    gudingStatusInfoL.setBounds(110, 40, windowRect.width - 120, 20);
+
+    Label tsL = new Label("Thermostabilization:");
+    add(tsL);
+    tsL.setBounds(5, 70, 115, 20);
+    add(thermoStabilizationL);
+    thermoStabilizationL.setBounds(125, 70, 45, 20);
+    add(thermoStabilizationInfoL);
+    thermoStabilizationInfoL.setBounds(170, 70, windowRect.width - 180, 20);
+
+    add(focusCompensationL);
+    focusCompensationL.setBounds(5, 90, windowRect.width - 10, 20);
+  }
 
   public static void main(String[] args)
   {
     PropertyConfigurator.configure("log4j.properties");
+    final Monitor monitor = new Monitor();
     if (args.length > 0 && args[0].equals("-s"))
-      new Monitor().shutdown(true);
+      monitor.shutdown(true);
     else
-      new Monitor().thread.start();
+    {
+      monitor.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+      monitor.setVisible(true);
+      monitor.setBounds(monitor.windowRect);
+      monitor.thread.setDaemon(true);
+      monitor.thread.start();
+    }
   }
 
   @Override
@@ -52,8 +110,8 @@ public class Monitor implements Runnable
       lgr.info("");
       lgr.info("Astro Monitor started" + ("true".equals(properties.getProperty("emulation")) ? " in emulation mode" : ""));
 
-      testRelay();
-      scopeTest();
+//      testRelay();
+//      scopeTest();
 
       while (isAlive)
       {
@@ -62,6 +120,7 @@ public class Monitor implements Runnable
         int checkDelay = getIntProperty("check.delay", 10);
         lgr.info("checkDelay: " + checkDelay + " seconds");
 
+        statusTimeL.setText(df1.format(new Date()));
         if (!poweredOn())
         {
           lgr.info("");
@@ -75,7 +134,7 @@ public class Monitor implements Runnable
           shutdown(false);
         }
 
-        focuserTempCompensation();
+        temperatureAndFocus();
         sleepS(checkDelay);
       }
     }
@@ -109,12 +168,16 @@ public class Monitor implements Runnable
     if (Files.exists(powerOffFile))
     {
       final long poweredOffAgo = (System.currentTimeMillis() - powerOffFile.toFile().lastModified()) / 1000;
+      powerStatusL.setText("OFF for " + poweredOffAgo + " seconds");
+      powerStatusL.setForeground(Color.red);
       lgr.warn("no power for " + poweredOffAgo + " seconds");
       return poweredOffAgo < getIntProperty("power.failure.timeout", 30);
     }
     else
     {
-      lgr.info("power is on");
+      powerStatusL.setText("ON");
+      powerStatusL.setForeground(Color.green.darker());
+      lgr.warn("power is on");
       return true;
     }
   }
@@ -126,8 +189,8 @@ public class Monitor implements Runnable
       String phd2logDir = properties.getProperty("phd2.log.dir");
       Path dir = Paths.get(phd2logDir);  // specify your directory
       Optional<Path> lastFilePath = Files.list(dir)    // here we get the stream with full directory listing
-              .filter(f -> !Files.isDirectory(f) && f.getFileName().toString().startsWith("PHD2_GuideLog"))  // exclude subdirectories from listing
-              .max(Comparator.comparingLong(f -> f.toFile().lastModified()));  // finally get the last file using simple comparator by lastModified field
+        .filter(f -> !Files.isDirectory(f) && f.getFileName().toString().startsWith("PHD2_GuideLog"))  // exclude subdirectories from listing
+        .max(Comparator.comparingLong(f -> f.toFile().lastModified()));  // finally get the last file using simple comparator by lastModified field
 
       if (!lastFilePath.isPresent()) // your folder may be empty
       {
@@ -163,12 +226,17 @@ public class Monitor implements Runnable
       if (!guidingWasActive)
       {
         lgr.info("guiding not started, waiting for guiding starting..");
+        gudingStatusL.setText("Waiting");
+        gudingStatusL.setForeground(Color.black);
         return true;
       }
 
+      gudingStatusInfoL.setText(lastLine);
       if (!guiding || guidingStep == lastGuidingStep)   // not guiding or stuck
       {
         lgr.warn(guiding ? "PHD2 log file is not updaing" : "guiding failed");
+        gudingStatusL.setText((guiding ? "Stuck" : "Failed"));
+        gudingStatusL.setForeground(Color.red);
         if (guidingFailureTime == -1)
           guidingFailureTime = System.currentTimeMillis();
 
@@ -182,6 +250,8 @@ public class Monitor implements Runnable
       {
         lastGuidingStep = guidingStep;
         guidingFailureTime = -1;
+        gudingStatusL.setText("Active");
+        gudingStatusL.setForeground(Color.green.darker());
         return true;
       }
 
@@ -450,52 +520,77 @@ public class Monitor implements Runnable
     }).start();
   }
 
-  private void focuserTempCompensation()
+  private void temperatureAndFocus()
   {
     lgr.info("");
     try
     {
       String tempFile = properties.getProperty("temp.file");
-      String tempSensor = properties.getProperty("temp.sensor");
       lgr.info("getting current temperature from: " + tempFile);
+      HashMap<String, Float> sensorsData = new HashMap<>();
       BufferedReader reader = Files.newBufferedReader(Paths.get(tempFile), StandardCharsets.UTF_8);
       String line;
-      float currTemp = Float.MIN_VALUE;
       if ((line = reader.readLine()) != null)
       {
-        int pos = line.indexOf(tempSensor);
-        if (pos != -1)
-          currTemp = Float.parseFloat(line.substring(pos + tempSensor.length() + 1, line.indexOf(" ", pos)).replace(",", "."));
+        String[] sensors = line.split(" ");
+        for (String sensor : sensors)
+        {
+          if (!sensor.contains("="))
+            continue;
+          String[] sa = sensor.split("=");
+          sensorsData.put(sa[0], Float.parseFloat(sa[1].replace(",", ".")));
+        }
       }
       else
         lgr.warn("no data in temp file..");
 
-      if (currTemp == Float.MIN_VALUE)
+      String airTempSensor = properties.getProperty("temp.air.sensor");
+      float currAirTemp = sensorsData.get(airTempSensor);
+      if (currAirTemp == Float.MIN_VALUE)
       {
-        lgr.warn("cannot get " + tempSensor + " value from line: " + line);
+        lgr.warn("cannot get " + airTempSensor + " value from line: " + line);
         return;
       }
 
-      lgr.info("current temp: " + tempSensor + " = " + currTemp);
-      if (startTemp == Float.MIN_VALUE)
+      lgr.info("current temp: " + airTempSensor + " = " + currAirTemp);
+      if (startAirTemp == Float.MIN_VALUE)
       {
-        lgr.info("setting start temperature to: " + currTemp);
-        startTemp = currTemp;
-        return;
+        lgr.info("setting start temperature to: " + currAirTemp);
+        startAirTemp = currAirTemp;
+      }
+      else
+      {
+        float diff = currAirTemp - startAirTemp;
+        float compensation = diff * getIntProperty("focuser.compensation", -100);
+        int focuserStepSize = getIntProperty("focuser.step.size", 10);
+        lgr.info("diff with " + startAirTemp + " is " + diff + ", compensation: " + compensation + ", focuserPosition : " + focuserPosition);
+        if (Math.abs(compensation - focuserPosition) >= focuserStepSize)
+        {
+          String dir = compensation > focuserPosition ? "up" : "down";
+          execScript(properties.getProperty("focuser." + dir + ".script"));
+          focuserPosition += compensation > focuserPosition ? focuserStepSize : -focuserStepSize;
+          lgr.info("focuserPosition: " + focuserPosition);
+        }
+
+        focusCompensationL.setText("Air: " + currAirTemp + "   (started: " + startAirTemp + ", diff: " + diff + ")    focuser compensation: " + focuserPosition);
       }
 
-      float diff = currTemp - startTemp;
-      float compensation = diff * getIntProperty("focuser.compensation", -100);
-      int focuserStepSize = getIntProperty("focuser.step.size", 10);
-      lgr.info("diff with " + startTemp + " is " + diff + ", compensation: " + compensation + ", focuserPosition : " + focuserPosition);
-      if (Math.abs(compensation - focuserPosition) >= focuserStepSize)
+      String mainMirrorTempSensor = properties.getProperty("temp.main.mirror.sensor");
+      float mirrorTemp = sensorsData.get(mainMirrorTempSensor);
+      int thermostabilization = 100 - Math.round(10 * Math.abs(mirrorTemp - currAirTemp));
+      thermoStabilizationL.setText(thermostabilization + "%");
+      thermoStabilizationInfoL.setText("main mirror: " + mirrorTemp + ", diff: " + (mirrorTemp - currAirTemp));
+      if (currAirTemp - mirrorTemp > 0.5)
       {
-        String dir = compensation > focuserPosition ? "up" : "down";
-        execScript(properties.getProperty("focuser." + dir + ".script"));
-        focuserPosition += compensation > focuserPosition ? focuserStepSize : -focuserStepSize;
-        lgr.info("focuserPosition: " + focuserPosition);
+        int b = Math.round(100 * (currAirTemp - mirrorTemp));
+        thermoStabilizationL.setForeground(new Color(0, 0, b > 255 ? 255 : b));
       }
-
+      else
+      {
+        int r = Math.round(2.55f * (100 - thermostabilization));
+        int g = Math.round(1.76f * Math.abs(thermostabilization));
+        thermoStabilizationL.setForeground(new Color(r < 255 ? r : 255, g, 0));
+      }
     }
     catch (Exception e)
     {
