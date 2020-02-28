@@ -189,8 +189,8 @@ public class Monitor extends JFrame implements Runnable
       String phd2logDir = properties.getProperty("phd2.log.dir");
       Path dir = Paths.get(phd2logDir);  // specify your directory
       Optional<Path> lastFilePath = Files.list(dir)    // here we get the stream with full directory listing
-        .filter(f -> !Files.isDirectory(f) && f.getFileName().toString().startsWith("PHD2_GuideLog"))  // exclude subdirectories from listing
-        .max(Comparator.comparingLong(f -> f.toFile().lastModified()));  // finally get the last file using simple comparator by lastModified field
+          .filter(f -> !Files.isDirectory(f) && f.getFileName().toString().startsWith("PHD2_GuideLog"))  // exclude subdirectories from listing
+          .max(Comparator.comparingLong(f -> f.toFile().lastModified()));  // finally get the last file using simple comparator by lastModified field
 
       if (!lastFilePath.isPresent()) // your folder may be empty
       {
@@ -240,9 +240,9 @@ public class Monitor extends JFrame implements Runnable
         if (guidingFailureTime == -1)
           guidingFailureTime = System.currentTimeMillis();
 
-        int phd2guidingFailureTimeout = getIntProperty("phd2.guiding.failure.timeout", 120);
-        lgr.info("phd2guidingFailureTimeout: " + phd2guidingFailureTimeout + " seconds");
-        lgr.info("PHD2 time to failure timeout: " + (guidingFailureTime + 1000 * phd2guidingFailureTimeout - System.currentTimeMillis()) / 1000 + " seconds");
+        int phd2guidingFailureTimeout = getIntProperty("phd2.guiding.failure.timeout", 5);
+        lgr.info("phd2guidingFailureTimeout: " + phd2guidingFailureTimeout + " minutes");
+        lgr.info("PHD2 time to failure timeout: " + (guidingFailureTime + 60 * 1000 * phd2guidingFailureTimeout - System.currentTimeMillis()) / 1000 + " seconds");
 
         return (System.currentTimeMillis() < guidingFailureTime + 1000 * phd2guidingFailureTimeout);
       }
