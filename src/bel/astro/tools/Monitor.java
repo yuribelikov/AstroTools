@@ -201,13 +201,14 @@ public class Monitor extends JFrame implements Runnable
       lgr.info("last PHD2 log: " + lastFilePath.get().getFileName());
       BufferedReader reader = Files.newBufferedReader(lastFilePath.get(), StandardCharsets.UTF_8);
       final String guiding_begins = "Guiding Begins";
+      final String guiding_ends = "Guiding Ends";
       String guidingStatus = "undefined";
       String lastLine = "";
       int guidingStep = -1;
       String line;
       while ((line = reader.readLine()) != null)
       {
-        if (line.startsWith(guiding_begins) || line.startsWith("Guiding Ends"))
+        if (line.startsWith(guiding_begins) || line.startsWith(guiding_ends))
           guidingStatus = line;
 
         if (line.trim().length() > 0)
@@ -235,16 +236,24 @@ public class Monitor extends JFrame implements Runnable
       if (!guiding || guidingStep == lastGuidingStep)   // not guiding or stuck
       {
         lgr.warn(guiding ? "PHD2 log file is not updaing" : "guiding failed");
-        gudingStatusL.setText((guiding ? "Stuck" : "Failed"));
-        gudingStatusL.setForeground(Color.red);
         if (guidingFailureTime == -1)
           guidingFailureTime = System.currentTimeMillis();
 
         int phd2guidingFailureTimeout = getIntProperty("phd2.guiding.failure.timeout", 5);
-        lgr.info("phd2guidingFailureTimeout: " + phd2guidingFailureTimeout + " minutes");
-        lgr.info("PHD2 time to failure timeout: " + (guidingFailureTime + 60 * 1000 * phd2guidingFailureTimeout - System.currentTimeMillis()) / 1000 + " seconds");
+        int phd2guidingEndTimeout = getIntProperty("phd2.guiding.end.timeout", 20);
+        lgr.info("phd2 guiding timeouts (failures, end), minutes: " + phd2guidingFailureTimeout + ", " + phd2guidingEndTimeout);
+        long timeout = guidingStatus.startsWith(guiding_ends) ? phd2guidingEndTimeout : phd2guidingFailureTimeout;    // guiding ends timeout is different (e.g. for meridian flip)
+        long secondsToShutdown = (guidingFailureTime + 60 * 1000 * timeout - System.currentTimeMillis()) / 1000;
+        lgr.info("time to shutdown: " + secondsToShutdown + " seconds");
+        gudingStatusL.setText((guiding ? "Stuck" : "Failed"));
+        gudingStatusL.setForeground(Color.red);
+        lastLine = lastLine.length() < 50 ? lastLine : lastLine.substring(0, 50);
+        long minsToShutdown = secondsToShutdown / 60;
+        gudingStatusInfoL.setText(lastLine + "..  " + minsToShutdown + " minutes to shutdown..");
+        if (minsToShutdown == 5 || minsToShutdown == 3 || minsToShutdown <= 1)
+          this.toFront();
 
-        return (System.currentTimeMillis() < guidingFailureTime + 1000 * phd2guidingFailureTimeout);
+        return secondsToShutdown > 0;
       }
       else
       {
