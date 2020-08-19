@@ -134,6 +134,8 @@ public class Monitor extends JFrame implements Runnable
           shutdown();
         }
 
+        roofCheckAndOpenOrClose();
+
         temperatureAndFocus();
         sleepS(checkDelay);
       }
@@ -182,10 +184,11 @@ public class Monitor extends JFrame implements Runnable
     }
   }
 
-  private boolean checkGuiding()    // return true if guiding is in progress or recently failed; false if failed and failure timeout occured
+  private boolean checkGuiding()    // return true if guiding is in progress or recently failed OR by default; false if failed and failure timeout occured
   {
     try
     {
+      gudingStatusL.setText("Error");
       String phd2logDir = properties.getProperty("phd2.log.dir");
       Path dir = Paths.get(phd2logDir);  // specify your directory
       Optional<Path> lastFilePath = Files.list(dir)    // here we get the stream with full directory listing
@@ -195,7 +198,7 @@ public class Monitor extends JFrame implements Runnable
       if (!lastFilePath.isPresent()) // your folder may be empty
       {
         lgr.info("PHD2 log not found in: " + dir.toFile().getAbsolutePath());
-        return false;
+        return true;
       }
 
       lgr.info("last PHD2 log: " + lastFilePath.get().getFileName());
@@ -270,7 +273,7 @@ public class Monitor extends JFrame implements Runnable
       lgr.warn(e.getMessage(), e);
     }
 
-    return false;
+    return true;
   }
 
   private int getGuidingStep(String logLine)
@@ -388,14 +391,54 @@ public class Monitor extends JFrame implements Runnable
   {
     lgr.info("");
     lgr.info("closing roof..");
-    int relayDuration = Integer.parseInt(properties.getProperty("roof.close.relay.duration"));
-    lgr.info("relayDuration: " + relayDuration +" sec");
+    int relayDuration = Integer.parseInt(properties.getProperty("roof.auto.close.relay.duration"));
+    lgr.info("relayDuration: " + relayDuration + " sec");
     execRelay("relay.roof.close.start");
     sleepS(relayDuration);
     execRelay("relay.roof.all.off");
     sleepS(5);
     execRelay("relay.roof.all.off");    // to avoid the motor continously rotating and sounding..
     lgr.info("roof closed.");
+  }
+
+  private void roofCheckAndOpenOrClose()
+  {
+    try
+    {
+      String[] commands = {"open", "close"};
+      for (String command : commands)
+      {
+        final Path roofFile = Paths.get(properties.getProperty("roof." + command + ".file"));
+        if (Files.exists(roofFile))
+        {
+          BufferedReader reader = Files.newBufferedReader(roofFile, StandardCharsets.UTF_8);
+          int relayDuration = Integer.parseInt(reader.readLine().trim());
+          lgr.info("");
+          lgr.warn(command + " roof, relayDuration: " + relayDuration);
+          reader.close();
+
+          //noinspection ResultOfMethodCallIgnored
+          roofFile.toFile().delete();
+          lgr.info(roofFile + " deleted.");
+
+          execRelay("relay.roof." + command + ".start");
+          sleepS(relayDuration);
+          execRelay("relay.roof.all.off");
+          sleepS(5);
+          execRelay("relay.roof.all.off");    // to avoid the motor continously rotating and sounding..
+          lgr.info("roof " + command + "ed.");
+
+          sleepS(2);
+          String warm = command.equals(commands[0]) ? "off" : "on";
+          execRelay("relay.main.mirror.warm." + warm);    // warm is off when open and on when close
+          lgr.info("main mirrow warmup is " + warm);
+        }
+      }
+    }
+    catch (Exception e)
+    {
+      lgr.warn(e.getMessage(), e);
+    }
   }
 
   private HashMap execScript(String scriptName)
@@ -574,7 +617,7 @@ public class Monitor extends JFrame implements Runnable
       {
         int r = Math.round(2.55f * (100 - thermostabilization));
         int g = Math.round(1.76f * Math.abs(thermostabilization));
-        thermoStabilizationL.setForeground(new Color(r < 255 ? r : 255, g, 0));
+        thermoStabilizationL.setForeground(new Color(Math.min(r, 255), g, 0));
       }
     }
     catch (Exception e)
