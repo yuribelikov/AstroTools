@@ -89,7 +89,7 @@ public class Monitor extends JFrame implements Runnable
     PropertyConfigurator.configure("log4j.properties");
     final Monitor monitor = new Monitor();
     if (args.length > 0 && args[0].equals("-s"))
-      monitor.shutdown(true);
+      monitor.shutdown();
     else
     {
       monitor.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -125,13 +125,13 @@ public class Monitor extends JFrame implements Runnable
         {
           lgr.info("");
           lgr.warn("power is off and timed out..");
-          shutdown(true);
+          shutdown();
         }
         else if (!checkGuiding())
         {
           lgr.info("");
           lgr.warn("guiding failed and timed out..");
-          shutdown(false);
+          shutdown();
         }
 
         temperatureAndFocus();
@@ -286,37 +286,38 @@ public class Monitor extends JFrame implements Runnable
     }
   }
 
-  private void shutdown(boolean fast)
+  private void shutdown()
   {
     try
     {
       reloadProperties();
 
       lgr.info("");
-      lgr.warn("starting " + (fast ? "fast " : "") + "shutdown sequence..");
+      lgr.warn("starting shutdown sequence..");
       lgr.info("");
       lgr.info("light on..");
-      execRelay("relay.light.out.on");
-      sleepS(1);
+      execRelay("relay.light.on");
+      sleepS(2);
 
       lgr.info("");
       lgr.info("starting main mirrow warmup..");
       execRelay("relay.main.mirror.warm.on");
-      sleepS(1);
+      sleepS(2);
 
       if ("true".equals(properties.getProperty("camera.cooler.off")))
       {
         lgr.info("");
         lgr.info("powering off camera cooler..");
         execRelay("relay.camera.cooler.off");
-        sleepS(1);
+        sleepS(2);
       }
 
       scopePark();
-      sleepS(1);
+      sleepS(2);
 
-      roofPreClose(fast);
       scopePark();    // this double checks the scope park position - do not remove!
+      sleepS(2);
+
       roofClose();
 
       lgr.info("shutdown finished.");
@@ -330,7 +331,7 @@ public class Monitor extends JFrame implements Runnable
 
     sleepS(1);
     lgr.info("light off..");
-    execRelay("relay.light.out.off");
+    execRelay("relay.light.off");
 
     sleepS(2);
     isAlive = false;
@@ -383,42 +384,17 @@ public class Monitor extends JFrame implements Runnable
     lgr.info("scope parked successfully on: " + logPos);
   }
 
-  private void roofPreClose(boolean fast)
-  {
-    lgr.info("");
-    lgr.info("pre-closing roof..");
-    execRelay("relay.roof.pre.close.prepare");
-    sleepS(1);
-    execRelay("relay.roof.pre.close.start");
-    sleepS(getFloatProperty("roof.pre.close.cmd.duration", 3.0f));
-    execRelay("relay.roof.pre.close.stop");
-    lgr.info("roof pre-closed.");
-
-    float wait = fast ? 5 : getFloatProperty("roof.pre.close.pause", 120);
-    lgr.info("waiting for " + wait + "seconds");
-    sleepS(wait);
-  }
-
   private void roofClose()
   {
     lgr.info("");
     lgr.info("closing roof..");
-    String[] sa = properties.getProperty("roof.close.sequence").split(",");
-    double[] closeSequence = new double[sa.length];
-    for (int i = 0; i < sa.length; i++)
-      closeSequence[i] = Double.parseDouble(sa[i].trim());
-
+    int relayDuration = Integer.parseInt(properties.getProperty("roof.close.relay.duration"));
+    lgr.info("relayDuration: " + relayDuration +" sec");
     execRelay("relay.roof.close.start");
-    for (int i = 0; i < closeSequence.length; i++)
-    {
-      sleepS(closeSequence[i]);
-      if (i % 2 == 0)       // roof.close.sequence = 0.5, 10, 0.5, 10, 0.5, 10
-        execRelay("relay.roof.move.off");
-      else
-        execRelay("relay.roof.move.on");
-    }
-
+    sleepS(relayDuration);
     execRelay("relay.roof.all.off");
+    sleepS(5);
+    execRelay("relay.roof.all.off");    // to avoid the motor continously rotating and sounding..
     lgr.info("roof closed.");
   }
 
@@ -631,18 +607,6 @@ public class Monitor extends JFrame implements Runnable
     try
     {
       return Integer.parseInt(properties.getProperty(property));
-    }
-    catch (Exception ignored)
-    {
-      return defaultValue;
-    }
-  }
-
-  private float getFloatProperty(String property, float defaultValue)
-  {
-    try
-    {
-      return Float.parseFloat(properties.getProperty(property));
     }
     catch (Exception ignored)
     {
